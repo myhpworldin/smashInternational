@@ -22,14 +22,28 @@ export async function POST(request: NextRequest) {
   const ip =
     request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
 
-  const result = await notify(parsed.data.email, ip);
+  try {
+    const result = await notify(parsed.data.email, ip);
 
-  if (!result.ok) {
+    if (!result.ok) {
+      return NextResponse.json(
+        { ok: false, message: "Too many requests. Try again in a minute." },
+        { status: 429 },
+      );
+    }
+
+    return NextResponse.json({ ok: true }, { status: 200 });
+  } catch (error) {
+    // Without this, a thrown Mongo/connection error fell through as an
+    // unhandled 500 with no JSON body — the client then showed the
+    // generic "invalid email" fallback, masking real backend failures.
+    console.error("[notify] failed to save signup:", error);
     return NextResponse.json(
-      { ok: false, message: "Too many requests. Try again in a minute." },
-      { status: 429 },
+      {
+        ok: false,
+        message: "Something went wrong saving that. Try again shortly.",
+      },
+      { status: 500 },
     );
   }
-
-  return NextResponse.json({ ok: true }, { status: 200 });
 }

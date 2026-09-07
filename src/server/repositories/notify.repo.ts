@@ -1,7 +1,10 @@
 import "server-only";
 import { getMongoClient } from "@/server/db/mongo";
 
-const DB_NAME = process.env.MONGODB_DB || "smash_international";
+// client.db(name) OVERRIDES whatever database the connection string
+// points at. Only pass a name when MONGODB_DB is explicitly set —
+// otherwise defer to the database already named in MONGODB_URI's path.
+const DB_NAME = process.env.MONGODB_DB || undefined;
 const COLLECTION = "notify_signups";
 
 export async function save(email: string): Promise<void> {
