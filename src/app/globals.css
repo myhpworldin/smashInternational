@@ -1,26 +1,57 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  --color-void: #000000;
+  --color-white: #ffffff;
+  --color-bone: #edeae6;
+  --color-ash: #8a8a8a;
+  --color-carbon: #131313;
+  --color-smash: #e50914;
+  --color-smash-dim: #8c060d;
+  /* --color-smash is 4.38:1 on --void — under the 4.5:1 AA floor for text.
+     Use this for readable text on void; keep --color-smash for decoration. */
+  --color-smash-text: #ee1b26;
+
+  --font-display: var(--font-archivo);
+  --font-body: var(--font-inter-tight);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+@layer base {
+  html,
+  body {
+    background: var(--color-void);
+    color: var(--color-bone);
+    min-height: 100dvh;
+  }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+  }
+
+  html {
+    scrollbar-gutter: stable;
+  }
+
+  ::selection {
+    background: var(--color-smash);
+    color: var(--color-white);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-smash);
+    outline-offset: 2px;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
