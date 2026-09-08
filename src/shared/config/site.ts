@@ -12,7 +12,8 @@ export const site = {
   // The part of legalName that renders under the SMASH wordmark.
   legalNameSuffix: "DIGITAL MEDIA PRIVATE LIMITED",
   parent: "Sysmantech",
-  tagline: "We're building Sysmantech's digital marketing arm. Launching soon.",
+  tagline:
+    "We're building search, paid media, social, content, and analytics campaigns. Launching soon.",
   email: "hello@smash.international",
   phone: "+91 95399 00003",
   phoneHref: "+919539900003",

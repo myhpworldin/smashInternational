@@ -22,7 +22,7 @@ const interTight = Inter_Tight({
 const siteUrl = `https://${site.domain}`;
 const title = `${site.name} — Launching soon`;
 const description =
-  "Smash International builds search, paid media, social, content, and analytics campaigns — Sysmantech's digital marketing arm, launching soon.";
+  "Smash International builds search, paid media, social, content, and analytics campaigns — launching soon.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
