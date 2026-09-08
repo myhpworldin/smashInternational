@@ -53,8 +53,10 @@ const organizationJsonLd = {
   "@context": "https://schema.org",
   "@type": "Organization",
   name: site.name,
+  legalName: site.legalName,
   url: siteUrl,
   logo: `${siteUrl}/apple-icon`,
+  telephone: site.phoneHref,
   address: {
     "@type": "PostalAddress",
     streetAddress: `${site.address.line1}, ${site.address.street}, ${site.address.locality}`,
@@ -67,7 +69,7 @@ const organizationJsonLd = {
     "@type": "Organization",
     name: site.parent,
   },
-  // TODO: add telephone and email once the site.ts placeholders are replaced with real values
+  // TODO: add email once the site.ts placeholder is replaced with a real value
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

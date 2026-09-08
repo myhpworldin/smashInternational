@@ -7,6 +7,7 @@ import Wordmark from "@/components/hero/Wordmark";
 import NotifyForm from "@/components/form/NotifyForm";
 import HeroTimeline from "@/components/motion/HeroTimeline";
 import Grain from "@/components/ambient/Grain";
+import { site } from "@/shared/config/site";
 
 export const dynamic = "force-static";
 
@@ -24,7 +25,7 @@ export default function Home() {
               data-anim="intl"
               className="translate-y-2 font-body text-base text-ash opacity-0"
             >
-              .international
+              {site.legalNameSuffix}
             </p>
             <Statement />
             <NotifyForm />
