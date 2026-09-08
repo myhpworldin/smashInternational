@@ -27,12 +27,6 @@ export default function ContactRail() {
         {address.district}, {address.region} {address.postalCode},{" "}
         {address.country}
       </address>
-      <p
-        data-anim="sysmantech"
-        className="whitespace-nowrap text-[11px] text-ash opacity-0 md:shrink-0 md:text-right"
-      >
-        A {site.parent} company
-      </p>
     </footer>
   );
 }

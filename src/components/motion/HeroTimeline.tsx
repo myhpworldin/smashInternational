@@ -36,9 +36,6 @@ export default function HeroTimeline({ children }: { children: ReactNode }) {
       const contactRailEl = root.querySelector<HTMLElement>(
         '[data-anim="contact-rail"]',
       )!;
-      const sysmantechEl = root.querySelector<HTMLElement>(
-        '[data-anim="sysmantech"]',
-      )!;
 
       const split = new SplitText(statementEl, {
         type: "lines",
@@ -61,7 +58,6 @@ export default function HeroTimeline({ children }: { children: ReactNode }) {
         gsap.set(split.lines, { y: "0%" });
         gsap.set(formEl, { opacity: 1, y: 0 });
         gsap.set([serviceStripEl, contactRailEl], { opacity: 1 });
-        gsap.set(sysmantechEl, { opacity: 1 });
 
         return () => {
           split.revert();
@@ -82,7 +78,6 @@ export default function HeroTimeline({ children }: { children: ReactNode }) {
       gsap.set(split.lines, { y: "100%" });
       gsap.set(formEl, { opacity: 0, y: 12 });
       gsap.set([serviceStripEl, contactRailEl], { opacity: 0 });
-      gsap.set(sysmantechEl, { opacity: 0 });
 
       const widthProxy = { wdth: 62 };
 
@@ -132,8 +127,7 @@ export default function HeroTimeline({ children }: { children: ReactNode }) {
           [serviceStripEl, contactRailEl],
           { opacity: 1, duration: 0.5, stagger: 0.06 },
           1.55,
-        )
-        .to(sysmantechEl, { opacity: 1, duration: 0.5 }, 1.75);
+        );
 
       return () => {
         split.revert();
