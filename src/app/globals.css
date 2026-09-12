@@ -17,11 +17,33 @@
 }
 
 @layer base {
+  html {
+    /* Without this, the page's own dark CSS colors still apply, but every
+       *browser-native* UI piece — autofill overlays, a <select>'s dropdown
+       popup, spin buttons — assumes a light UI and renders black text
+       regardless, since nothing told the browser this page is dark. */
+    color-scheme: dark;
+  }
+
   html,
   body {
     background: var(--color-void);
     color: var(--color-bone);
     min-height: 100dvh;
+  }
+
+  /* Autofill specifically ignores color-scheme and a plain `color` rule —
+     Chrome/Safari paint their own background (often a pale yellow/blue)
+     with black text on top of an autofilled field. -webkit-text-fill-color
+     is the one property that actually wins here; the inset box-shadow is
+     the standard trick to cover the forced background without needing
+     `background: transparent`, which autofill also overrides. */
+  input:-webkit-autofill,
+  textarea:-webkit-autofill,
+  select:-webkit-autofill {
+    -webkit-text-fill-color: var(--color-bone);
+    -webkit-box-shadow: 0 0 0 1000px var(--color-carbon) inset;
+    caret-color: var(--color-bone);
   }
 
   body {
