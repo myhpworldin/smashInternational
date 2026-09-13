@@ -16,7 +16,20 @@ export function getMongoClient(): Promise<MongoClient> {
     if (!uri) {
       throw new Error("Missing MONGODB_URI environment variable");
     }
-    globalForMongo._mongoClientPromise = new MongoClient(uri).connect();
+
+    const clientPromise = new MongoClient(uri).connect();
+    globalForMongo._mongoClientPromise = clientPromise;
+
+    // A Promise is truthy whether it resolves or rejects, so without this
+    // a single transient failure (a DNS hiccup, a brief network drop)
+    // gets cached forever — every request after that replays the exact
+    // same rejected promise, permanently, until the process restarts.
+    // Clearing the cache on failure lets the next call retry fresh.
+    clientPromise.catch(() => {
+      if (globalForMongo._mongoClientPromise === clientPromise) {
+        globalForMongo._mongoClientPromise = undefined;
+      }
+    });
   }
   return globalForMongo._mongoClientPromise;
 }

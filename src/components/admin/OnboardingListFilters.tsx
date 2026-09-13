@@ -24,7 +24,9 @@ export default function OnboardingListFilters({ currentStatus, currentQ }: Onboa
         <Link
           href={tabHref(undefined)}
           className={`border px-3 py-2 font-body text-xs transition-colors duration-150 focus-visible:-outline-offset-2 ${
-            !currentStatus ? "border-smash bg-smash-dim text-bone" : "border-carbon bg-carbon text-ash hover:text-bone"
+            !currentStatus
+              ? "border-smash bg-smash-dim text-bone"
+              : "border-white/15 bg-carbon text-bone hover:border-white/30"
           }`}
         >
           All
@@ -36,7 +38,7 @@ export default function OnboardingListFilters({ currentStatus, currentQ }: Onboa
             className={`border px-3 py-2 font-body text-xs transition-colors duration-150 focus-visible:-outline-offset-2 ${
               currentStatus === filter.id
                 ? "border-smash bg-smash-dim text-bone"
-                : "border-carbon bg-carbon text-ash hover:text-bone"
+                : "border-white/15 bg-carbon text-bone hover:border-white/30"
             }`}
           >
             {filter.label}
@@ -55,11 +57,11 @@ export default function OnboardingListFilters({ currentStatus, currentQ }: Onboa
           name="q"
           defaultValue={currentQ}
           placeholder="Search company, contact, or email"
-          className="w-full max-w-sm rounded-none border border-carbon bg-carbon px-3 py-2 font-body text-sm text-bone placeholder-ash focus-visible:-outline-offset-2"
+          className="w-full max-w-sm rounded-none border border-white/15 bg-carbon px-3 py-2 font-body text-sm text-bone placeholder-ash focus-visible:-outline-offset-2"
         />
         <button
           type="submit"
-          className="rounded-none border border-carbon bg-carbon px-4 py-2 font-body text-sm text-bone hover:border-ash focus-visible:-outline-offset-2"
+          className="rounded-none border border-white/15 bg-carbon px-4 py-2 font-body text-sm text-bone hover:border-white/30 focus-visible:-outline-offset-2"
         >
           Search
         </button>

@@ -24,7 +24,7 @@ export default function DashboardRail({ label }: { label: string }) {
         type="button"
         onClick={handleLogout}
         disabled={loggingOut}
-        className="text-ash hover:text-bone focus-visible:-outline-offset-2"
+        className="text-bone underline decoration-carbon underline-offset-4 transition-colors duration-150 hover:decoration-bone focus-visible:-outline-offset-2 disabled:opacity-60"
       >
         {loggingOut ? "Signing out" : "Sign out"}
       </button>

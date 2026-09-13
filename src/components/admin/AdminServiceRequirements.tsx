@@ -44,7 +44,7 @@ export default function AdminServiceRequirements({
         const responses = responsesByService.get(id) ?? {};
 
         return (
-          <div key={id} className="flex flex-col gap-2 border border-carbon p-4">
+          <div key={id} className="flex flex-col gap-2 border border-white/15 p-4">
             <h3 className="font-body text-xs tracking-[0.14em] text-ash uppercase">{service.label}</h3>
             <dl className="grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2">
               {service.fields.map((field) => (

@@ -45,13 +45,15 @@ export default function OnboardingTable({ records }: { records: OnboardingDoc[] 
             {records.map((doc) => (
               <tr key={doc._id.toHexString()} className="border-b border-carbon/60 text-bone">
                 <td className="py-3 pr-4">{companyName(doc)}</td>
-                <td className="py-3 pr-4 text-ash">{ONBOARDING_ADMIN_LABEL[doc.status]}</td>
-                <td className="py-3 pr-4 text-ash">
-                  {doc.submittedAt ? formatDateTime(doc.submittedAt) : "—"}
+                <td className="py-3 pr-4">
+                  <span className="border border-carbon bg-carbon px-2 py-1 text-xs text-bone uppercase">
+                    {ONBOARDING_ADMIN_LABEL[doc.status]}
+                  </span>
                 </td>
-                <td className="py-3 pr-4 text-ash">{servicesLabel(doc)}</td>
-                <td className="py-3 pr-4 text-ash">{budgetLabel(doc)}</td>
-                <td className="py-3 pr-4 text-ash">{completionPercent(doc)}%</td>
+                <td className="py-3 pr-4">{doc.submittedAt ? formatDateTime(doc.submittedAt) : "—"}</td>
+                <td className="py-3 pr-4">{servicesLabel(doc)}</td>
+                <td className="py-3 pr-4">{budgetLabel(doc)}</td>
+                <td className="py-3 pr-4">{completionPercent(doc)}%</td>
                 <td className="py-3">
                   <Link
                     href={`/admin/onboarding/${doc._id.toHexString()}`}
@@ -69,17 +71,19 @@ export default function OnboardingTable({ records }: { records: OnboardingDoc[] 
       <ul className="flex flex-col gap-3 md:hidden">
         {records.map((doc) => (
           <li key={doc._id.toHexString()} className="flex flex-col gap-2 border border-carbon p-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <span className="font-body text-sm text-bone">{companyName(doc)}</span>
-              <span className="font-body text-xs text-ash">{ONBOARDING_ADMIN_LABEL[doc.status]}</span>
+              <span className="border border-carbon bg-carbon px-2 py-1 font-body text-xs text-bone uppercase">
+                {ONBOARDING_ADMIN_LABEL[doc.status]}
+              </span>
             </div>
-            <p className="font-body text-xs text-ash">{servicesLabel(doc)}</p>
+            <p className="font-body text-sm text-bone">{servicesLabel(doc)}</p>
             <div className="flex items-center justify-between font-body text-xs text-ash">
               <span>{doc.submittedAt ? formatDateTime(doc.submittedAt) : "Not submitted"}</span>
               <span>{completionPercent(doc)}% complete</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="font-body text-xs text-ash">{budgetLabel(doc)}</span>
+              <span className="font-body text-sm text-bone">{budgetLabel(doc)}</span>
               <Link
                 href={`/admin/onboarding/${doc._id.toHexString()}`}
                 className="font-body text-xs text-ash underline hover:text-bone focus-visible:-outline-offset-2"

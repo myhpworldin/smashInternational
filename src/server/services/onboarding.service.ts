@@ -7,6 +7,7 @@ import * as usersRepo from "@/server/repositories/users.repo";
 import * as gridfs from "@/server/storage/gridfs";
 import { notifyOnboardingSubmitted } from "@/server/notifications/onboarding-notifications";
 import { generateAccessToken, readAccessToken } from "@/server/onboarding/access";
+import { verifySession } from "@/server/auth/dal";
 import type { OnboardingDoc } from "@/server/repositories/onboarding.repo";
 import {
   validateSelectedServiceIds,
@@ -51,6 +52,48 @@ export async function getOrCreateAnonymousDraft(): Promise<OnboardingDoc> {
   // Proxy's matcher. A draft created here can't have its cookie set (this
   // runs during a Server Component render), so it won't survive a reload.
   return onboardingRepo.createAnonymous(generateAccessToken());
+}
+
+// The single place that decides "whose draft is this request for" — every
+// client-facing onboarding route calls this instead of touching the
+// session, the cookie, or a repo lookup directly, so there is exactly one
+// place that identity logic can be gotten wrong rather than five.
+//
+// A logged-in client is identified by their session (userId -> the
+// account's linked clientId), never by anything the browser could supply
+// on the request itself (no onboardingId/clientId body field is ever
+// accepted anywhere in this file). An anonymous visitor keeps working
+// exactly as before Stage 2 (Phase 1-3 didn't touch this): the
+// onboarding_access cookie alone.
+//
+// The two identities merge lazily: the first time a logged-in client's
+// session reaches this function, whatever draft their current cookie
+// points at (typically the one they were just filling out before they
+// signed up) is "claimed" by writing its clientId onto their account —
+// permanently, one time. From then on the session resolves straight to
+// that clientId regardless of cookie/browser/device. A client with no
+// draft yet (never visited /onboarding, or a stale/missing link) gets a
+// fresh one, scoped to their account from creation.
+export async function resolveOnboardingIdentity(): Promise<{ doc: OnboardingDoc; viaSession: boolean }> {
+  const session = await verifySession();
+
+  if (session?.role === "client") {
+    const user = await usersRepo.findById(session.userId);
+    if (user?.clientId) {
+      const linked = await onboardingRepo.findByClientId(user.clientId);
+      if (linked) return { doc: linked, viaSession: true };
+      // Linked but the record itself is gone (deleted out of band) — fall
+      // through and re-claim/create rather than leaving the account stuck.
+    }
+
+    const token = await readAccessToken();
+    const draft = token ? await onboardingRepo.findByAccessToken(token) : null;
+    const claimed = draft ?? (await onboardingRepo.createAnonymous(token ?? generateAccessToken()));
+    await usersRepo.setClientId(new ObjectId(session.userId), claimed.clientId);
+    return { doc: claimed, viaSession: true };
+  }
+
+  return { doc: await getOrCreateAnonymousDraft(), viaSession: false };
 }
 
 // The caller (API route) must have already verified onboardingId belongs
@@ -185,15 +228,6 @@ export async function getAssetById(assetId: ObjectId) {
   return assetsRepo.findById(assetId);
 }
 
-// Read-only lookup — unlike getOrCreateAnonymousDraft, this never creates a
-// record for a missing/invalid token. Used only to check "does this
-// visitor's cookie map to the client that owns this asset" before serving
-// a file; a token that doesn't resolve should mean unauthorized, not a
-// silently-created fresh draft.
-export async function getDraftByAccessToken(token: string) {
-  return onboardingRepo.findByAccessToken(token);
-}
-
 // Deletes the metadata row (scoped to the owning client — a mismatch is a
 // silent no-op, not a leak) and, only once that succeeds, the GridFS bytes.
 export async function deleteAsset(assetId: ObjectId, clientId: ObjectId): Promise<boolean> {
@@ -227,6 +261,17 @@ export async function listForAdmin(params: {
   });
 
   return { records, total, page, pageSize };
+}
+
+export async function getAdminStatusCounts(): Promise<Record<OnboardingStatus, number>> {
+  const counts = await onboardingRepo.countByStatus();
+  return {
+    draft: counts.draft ?? 0,
+    submitted: counts.submitted ?? 0,
+    under_review: counts.under_review ?? 0,
+    approved: counts.approved ?? 0,
+    changes_requested: counts.changes_requested ?? 0,
+  };
 }
 
 // Viewing the detail page is what moves a record from "submitted" (not yet

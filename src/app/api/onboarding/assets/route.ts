@@ -1,14 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { assetMetadataSchema } from "@/shared/validation/onboarding";
 import { ASSET_TYPES, MAX_ASSET_SIZE_BYTES, isAllowedAssetMime } from "@/shared/types/onboarding";
-import { getOrCreateAnonymousDraft, addAsset, listAssets } from "@/server/services/onboarding.service";
+import { resolveOnboardingIdentity, addAsset, listAssets } from "@/server/services/onboarding.service";
 
 export const runtime = "nodejs";
 
+const GENERIC_ERROR = { ok: false, message: "Something went wrong. Try again shortly." };
+
 export async function GET() {
-  const doc = await getOrCreateAnonymousDraft();
-  const assets = await listAssets(doc._id);
-  return NextResponse.json({ ok: true, assets }, { status: 200 });
+  try {
+    const { doc } = await resolveOnboardingIdentity();
+    const assets = await listAssets(doc._id);
+    return NextResponse.json({ ok: true, assets }, { status: 200 });
+  } catch (error) {
+    console.error("[onboarding/assets/GET] failed:", error);
+    return NextResponse.json(GENERIC_ERROR, { status: 500 });
+  }
 }
 
 // Multipart upload — the actual bytes travel in this request (to GridFS,
@@ -56,10 +63,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, message: "File is too large." }, { status: 400 });
   }
 
-  const buffer = Buffer.from(await file.arrayBuffer());
+  try {
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const { doc } = await resolveOnboardingIdentity();
+    const asset = await addAsset(doc._id, doc.clientId, null, parsed.data, buffer);
 
-  const doc = await getOrCreateAnonymousDraft();
-  const asset = await addAsset(doc._id, doc.clientId, null, parsed.data, buffer);
-
-  return NextResponse.json({ ok: true, asset }, { status: 201 });
+    return NextResponse.json({ ok: true, asset }, { status: 201 });
+  } catch (error) {
+    console.error("[onboarding/assets/POST] failed:", error);
+    return NextResponse.json(GENERIC_ERROR, { status: 500 });
+  }
 }

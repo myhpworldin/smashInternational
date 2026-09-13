@@ -67,7 +67,7 @@ export default async function AdminOnboardingDetailPage({
         </Link>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h1 className="font-display text-xl text-bone">{company?.name ?? "(no company name yet)"}</h1>
-          <span className="border border-carbon px-3 py-1 font-body text-xs text-ash uppercase">
+          <span className="border border-carbon bg-carbon px-3 py-1 font-body text-xs text-bone uppercase">
             {ONBOARDING_ADMIN_LABEL[doc.status]}
           </span>
         </div>
@@ -187,9 +187,13 @@ export default async function AdminOnboardingDetailPage({
   );
 }
 
+// Each section gets its own top border — spacing alone (the outer flex
+// gap) wasn't enough of a boundary; sections read as one continuous block
+// with no way to tell where "Target Audience" ends and "Selected Services"
+// begins.
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="flex flex-col gap-3">
+    <section className="flex flex-col gap-3 border-t border-white/15 pt-6">
       <h2 className="font-body text-xs tracking-[0.14em] text-ash uppercase">{title}</h2>
       {children}
     </section>

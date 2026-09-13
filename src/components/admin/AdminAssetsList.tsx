@@ -23,16 +23,16 @@ export default function AdminAssetsList({ assets }: { assets: OnboardingAssetDoc
         const isImage = asset.mimeType.startsWith("image/");
 
         return (
-          <li key={asset._id.toHexString()} className="flex flex-col gap-2 border border-carbon p-3">
+          <li key={asset._id.toHexString()} className="flex flex-col gap-2 border border-white/15 p-3">
             {isImage ? (
               // eslint-disable-next-line @next/next/no-img-element -- authenticated, per-record file route; next/image's remote-optimizer doesn't apply here
               <img
                 src={fileUrl}
                 alt={asset.originalFilename}
-                className="h-32 w-full border border-carbon object-cover"
+                className="h-32 w-full border border-white/15 object-cover"
               />
             ) : (
-              <div className="flex h-32 w-full items-center justify-center border border-carbon font-body text-xs text-ash uppercase">
+              <div className="flex h-32 w-full items-center justify-center border border-white/15 font-body text-xs text-bone uppercase">
                 {asset.mimeType.split("/")[1] ?? "file"}
               </div>
             )}

@@ -33,6 +33,18 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL(ROLE_HOME[session.role] ?? "/", request.url));
   }
 
+  // An admin's real session must never be treated as "a client visiting
+  // their own onboarding" — checked here (the one place that can actually
+  // see the real, httpOnly admin session) rather than in the onboarding
+  // page/component, which only ever sees the separate mock client-auth
+  // signal and has no way to know about a real admin session at all.
+  // Scoped to the page itself, not /api/onboarding/*: admin legitimately
+  // calls some of those (e.g. the asset file route) when reviewing a
+  // client's submission from /admin/onboarding/[id].
+  if (pathname === "/onboarding" && session?.role === "admin") {
+    return NextResponse.redirect(new URL("/admin", request.url));
+  }
+
   // The onboarding flow has no login — a visitor's draft is identified by
   // this cookie alone. Next.js only allows setting cookies from a Route
   // Handler or Server Action, never from a Server Component's render, so

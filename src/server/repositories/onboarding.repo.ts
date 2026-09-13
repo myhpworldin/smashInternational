@@ -206,3 +206,14 @@ export async function listForAdmin(
 
   return { records, total };
 }
+
+// One aggregation instead of one countDocuments per status — used by the
+// admin dashboard overview.
+export async function countByStatus(): Promise<Record<string, number>> {
+  const coll = await collection();
+  const results = await coll
+    .aggregate<{ _id: string; count: number }>([{ $group: { _id: "$status", count: { $sum: 1 } } }])
+    .toArray();
+
+  return Object.fromEntries(results.map((r) => [r._id, r.count]));
+}

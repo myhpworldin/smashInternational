@@ -19,10 +19,11 @@ export async function POST(request: NextRequest) {
     const result = await login(parsed.data.email, parsed.data.password);
 
     if (!result.ok) {
-      return NextResponse.json(
-        { ok: false, message: "Incorrect email or password." },
-        { status: 401 },
-      );
+      const message =
+        result.reason === "unverified"
+          ? "Verify your email before logging in."
+          : "Incorrect email or password.";
+      return NextResponse.json({ ok: false, message }, { status: 401 });
     }
 
     return NextResponse.json({ ok: true, role: result.role }, { status: 200 });

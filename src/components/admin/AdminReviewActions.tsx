@@ -43,7 +43,7 @@ export default function AdminReviewActions({ onboardingId }: { onboardingId: str
   };
 
   return (
-    <div className="flex flex-col gap-3 border-t border-carbon pt-4">
+    <div className="flex flex-col gap-3 border-t border-white/15 pt-6">
       {error && (
         <p role="alert" className="font-body text-xs text-smash-text">
           {error}
@@ -60,7 +60,7 @@ export default function AdminReviewActions({ onboardingId }: { onboardingId: str
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={3}
-            className="w-full resize-y rounded-none border border-carbon bg-carbon px-3 py-2 font-body text-sm text-bone placeholder-ash focus-visible:-outline-offset-2"
+            className="w-full resize-y rounded-none border border-white/15 bg-carbon px-3 py-2 font-body text-sm text-bone placeholder-ash focus-visible:-outline-offset-2"
             placeholder="Be specific about what needs to change."
           />
         </div>
@@ -90,7 +90,7 @@ export default function AdminReviewActions({ onboardingId }: { onboardingId: str
           <button
             type="button"
             onClick={() => setShowChangesForm(true)}
-            className="rounded-none border border-carbon bg-carbon px-[18px] py-[14px] font-body text-bone hover:border-ash focus-visible:-outline-offset-2"
+            className="rounded-none border border-white/15 bg-carbon px-[18px] py-[14px] font-body text-bone hover:border-white/30 focus-visible:-outline-offset-2"
           >
             Request Changes
           </button>
