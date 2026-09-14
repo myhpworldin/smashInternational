@@ -87,8 +87,23 @@ export async function resolveOnboardingIdentity(): Promise<{ doc: OnboardingDoc;
     }
 
     const token = await readAccessToken();
-    const draft = token ? await onboardingRepo.findByAccessToken(token) : null;
-    const claimed = draft ?? (await onboardingRepo.createAnonymous(token ?? generateAccessToken()));
+    const rawDraft = token ? await onboardingRepo.findByAccessToken(token) : null;
+
+    // A draft found via the anonymous cookie must never be claimed if
+    // it's already linked to a *different* account — the cookie is
+    // long-lived (1 year) and logout never clears it, so the same
+    // browser previously used for another client's onboarding would
+    // otherwise silently hand that client's data to this session instead
+    // of starting a fresh draft for it.
+    let draft = rawDraft;
+    if (rawDraft) {
+      const existingOwner = await usersRepo.findByOnboardingClientId(rawDraft.clientId);
+      if (existingOwner && existingOwner._id.toHexString() !== session.userId) {
+        draft = null;
+      }
+    }
+
+    const claimed = draft ?? (await onboardingRepo.createAnonymous(generateAccessToken()));
     await usersRepo.setClientId(new ObjectId(session.userId), claimed.clientId);
     return { doc: claimed, viaSession: true };
   }

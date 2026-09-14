@@ -27,3 +27,14 @@ export async function readAccessToken(): Promise<string | undefined> {
   const store = await cookies();
   return store.get(ONBOARDING_ACCESS_COOKIE)?.value;
 }
+
+// Called on logout (see auth.service.ts) so a browser that just signed
+// out of one client account doesn't hand this cookie's draft to whoever
+// logs in next in the same browser — resolveOnboardingIdentity in
+// onboarding.service.ts also refuses to claim a draft already owned by a
+// different account, so this is defense in depth on top of that, not the
+// only thing preventing it.
+export async function clearAccessToken(): Promise<void> {
+  const store = await cookies();
+  store.delete(ONBOARDING_ACCESS_COOKIE);
+}

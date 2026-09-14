@@ -230,3 +230,14 @@ export async function clearOtp(userId: ObjectId): Promise<void> {
 export async function setClientId(userId: ObjectId, clientId: ObjectId): Promise<void> {
   await (await collection()).updateOne({ _id: userId }, { $set: { clientId } });
 }
+
+// The other side of setClientId — used to check whether an onboarding
+// record found via the anonymous access-token cookie already belongs to
+// a *different* account before letting a logged-in session claim it (see
+// resolveOnboardingIdentity). Without this check, a stale or shared
+// onboarding_access cookie — e.g. the same browser previously used for
+// another client account — would silently transfer that other client's
+// onboarding data onto whoever logs in next.
+export async function findByOnboardingClientId(clientId: ObjectId): Promise<UserDoc | null> {
+  return (await collection()).findOne({ clientId });
+}

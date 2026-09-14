@@ -11,6 +11,7 @@ import {
 import * as auditLog from "@/server/repositories/auditLog.repo";
 import { verifyPassword, hashPassword } from "@/server/auth/password";
 import { createSession, deleteSession } from "@/server/auth/session";
+import { clearAccessToken } from "@/server/onboarding/access";
 import {
   generateOtpCode,
   hashOtpCode,
@@ -54,6 +55,12 @@ export async function login(email: string, password: string): Promise<LoginResul
 
 export async function logout(): Promise<void> {
   await deleteSession();
+  // Otherwise the next person to log in on this browser (a different
+  // client account, most commonly while testing) could have their
+  // onboarding data resolved from whatever this browser last claimed —
+  // see clearAccessToken's own comment and resolveOnboardingIdentity in
+  // onboarding.service.ts for the primary fix this backs up.
+  await clearAccessToken();
 }
 
 export type LoginOtpResult = { ok: true } | { ok: false; errors: string[] };
