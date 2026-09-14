@@ -9,7 +9,7 @@ import ChipGroupField from "@/components/form/fields/ChipGroupField";
 import OtpInput from "@/components/form/fields/OtpInput";
 import { useLoginStore } from "@/store/useLoginStore";
 import { sendLoginOtp, verifyLoginOtp } from "@/lib/otp/loginTransport";
-import { looksLikeEmail, looksLikePhone } from "@/lib/form/identifier";
+import { identifierError } from "@/lib/form/identifier";
 import { writeMockClientSession } from "@/lib/mock/clientSession";
 import { determineClientDestination } from "@/lib/routing/clientDestination";
 
@@ -19,14 +19,16 @@ type OtpPhase = "idle" | "sending" | "otp_required" | "otp_verification" | "netw
 const OTP_LENGTH = 6;
 const RESEND_COOLDOWN_SECONDS = 30;
 
-// The documented login concept: one "Email / Mobile" identifier, and a
-// choice of Password or OTP as the authentication method — not two
-// separate login pages. Both Password and (email) OTP now call real
-// backend endpoints (see useLoginStore and src/lib/otp/loginTransport.ts).
-// Mobile-number login — either method — is still unsupported: UserDoc has
-// no phone field, so there's no backend account to check a password or
-// OTP against. Rather than fake it, both paths reject a phone-shaped
-// identifier with an explicit "use your email" message.
+// The documented login concept: a client identifier plus a choice of
+// Password or OTP as the authentication method — not two separate login
+// pages. Both methods now call real backend endpoints (see useLoginStore
+// and src/lib/otp/loginTransport.ts), and both are email-only: UserDoc has
+// no phone field, so there's no backend account to check a password or an
+// OTP against for a mobile number. Rather than advertise a method that
+// doesn't work, the identifier field only ever asks for email, and a
+// phone-shaped entry is rejected up front with the same message regardless
+// of which method is selected — never routed toward the other method as if
+// it would work there instead.
 export default function ClientLoginForm() {
   const router = useRouter();
   const storeStatus = useLoginStore((s) => s.status);
@@ -62,10 +64,9 @@ export default function ClientLoginForm() {
     e.preventDefault();
     if (storeStatus === "submitting") return;
 
-    if (!looksLikeEmail(identifier)) {
-      setFieldErrors({
-        identifier: "Password login needs an email address right now — use OTP to log in with a mobile number.",
-      });
+    const idError = identifierError(identifier);
+    if (idError) {
+      setFieldErrors({ identifier: idError });
       return;
     }
     setFieldErrors({});
@@ -82,12 +83,9 @@ export default function ClientLoginForm() {
     if (otpPhase === "sending") return;
 
     const trimmed = identifier.trim();
-    if (!looksLikeEmail(trimmed)) {
-      setFieldErrors({
-        identifier: looksLikePhone(trimmed)
-          ? "OTP login isn't available for mobile numbers yet — use your email."
-          : "Enter a valid email address.",
-      });
+    const idError = identifierError(trimmed);
+    if (idError) {
+      setFieldErrors({ identifier: idError });
       return;
     }
     setFieldErrors({});
@@ -148,11 +146,12 @@ export default function ClientLoginForm() {
       />
 
       <TextField
-        label="Email or mobile number"
+        label="Email"
+        type="email"
         required
         value={identifier}
         onChange={setIdentifier}
-        placeholder="you@example.com or +91 98765 43210"
+        placeholder="you@example.com"
         error={fieldErrors.identifier}
       />
 
