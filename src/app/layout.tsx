@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Archivo, Inter_Tight } from "next/font/google";
 import "./globals.css";
 import { site } from "@/shared/config/site";
+import AuthEntryGuard from "@/components/auth/AuthEntryGuard";
 
 const archivo = Archivo({
   axes: ["wdth"],
@@ -82,6 +83,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             __html: JSON.stringify(organizationJsonLd).replace(/</g, "\\u003c"),
           }}
         />
+        <AuthEntryGuard />
         {children}
       </body>
     </html>

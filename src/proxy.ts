@@ -9,6 +9,14 @@ import { generateAccessToken, ONBOARDING_ACCESS_COOKIE } from "@/server/onboardi
 // substitute for per-request verification.
 const ROLE_HOME: Record<string, string> = {
   admin: "/admin",
+  // Not necessarily a client's *ideal* landing spot (an approved client
+  // belongs on /dashboard) — but proxy.ts is edge-only and never reads
+  // the database (see the file-level comment), so it can't compute that
+  // here. /onboarding is the safe default: it already branches internally
+  // between the wizard and a status screen for every progress state, the
+  // same fallback resolveClientDestination() uses client-side. Previously
+  // missing entirely, which sent an authenticated client to "/" instead.
+  client: "/onboarding",
 };
 
 const ONBOARDING_ACCESS_MAX_AGE_SECONDS = 60 * 60 * 24 * 365;
@@ -18,7 +26,13 @@ export async function proxy(request: NextRequest) {
   const session = await decrypt(request.cookies.get("session")?.value);
 
   const isAdminRoute = pathname.startsWith("/admin");
-  const isLoginRoute = pathname === "/login";
+  // /signup and /verify-email belong here too: an already-authenticated
+  // visitor landing on any of these (fresh navigation, typed URL, or the
+  // browser's back button after finishing signup/login) must never be
+  // served that page while still signed in — see the pageshow/bfcache
+  // handling in AuthEntryGuard.tsx for the complementary fix covering the
+  // browser-cache-only case this per-request check can't see.
+  const isAuthEntryRoute = pathname === "/login" || pathname === "/signup" || pathname === "/verify-email";
   const isOnboardingRoute = pathname === "/onboarding" || pathname.startsWith("/api/onboarding");
 
   if (isAdminRoute && !session) {
@@ -29,7 +43,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL(ROLE_HOME[session.role] ?? "/", request.url));
   }
 
-  if (isLoginRoute && session) {
+  if (isAuthEntryRoute && session) {
     return NextResponse.redirect(new URL(ROLE_HOME[session.role] ?? "/", request.url));
   }
 
@@ -84,5 +98,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/login", "/onboarding", "/api/onboarding/:path*"],
+  matcher: ["/admin/:path*", "/login", "/signup", "/verify-email", "/onboarding", "/api/onboarding/:path*"],
 };

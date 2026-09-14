@@ -38,6 +38,18 @@ export default function OtpVerificationForm() {
   const searchParams = useSearchParams();
   const email = searchParams.get("email") ?? "";
 
+  // No email means no code was ever sent for this visit — reached by
+  // typing the URL directly, or a stray navigation with the query string
+  // dropped. Nothing to verify, so this isn't a valid landing spot;
+  // send them back to start signup properly instead of showing an OTP
+  // form for a code that doesn't exist.
+  useEffect(() => {
+    if (!email) {
+      router.replace("/signup");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [email]);
+
   // Starts at "awaiting_input", not "sending": the first code was already
   // dispatched as a side effect of the signup call that brought the user
   // here (see /api/auth/signup) — sending another on arrival would mean
@@ -132,6 +144,12 @@ export default function OtpVerificationForm() {
 
   const code = digits.join("");
   const inputDisabled = state === "expired" || state === "verifying" || state === "sending" || state === "verified";
+
+  // Redirecting away (see the effect above) — don't flash the OTP form
+  // for a code that was never sent while that navigation is in flight.
+  if (!email) {
+    return null;
+  }
 
   return (
     <StepTransition>

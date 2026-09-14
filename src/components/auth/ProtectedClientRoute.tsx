@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { readMockClientSession } from "@/lib/mock/clientSession";
 import { resolveClientDestination, resolveOnboardingProgress } from "@/lib/routing/clientDestination";
+import ClientHeader from "@/components/auth/ClientHeader";
 
 // This is a UX convenience, not a security boundary — a determined visitor
 // can trivially bypass it (it's a client-side redirect based on a
@@ -81,5 +82,10 @@ export default function ProtectedClientRoute({
     );
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      <ClientHeader />
+      {children}
+    </>
+  );
 }
