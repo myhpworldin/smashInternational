@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifySession } from "@/server/auth/dal";
+import { getAuthorizedAdmin } from "@/server/auth/dal";
 import { listForAdmin } from "@/server/services/onboarding.service";
 
 export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
-  const session = await verifySession();
-  if (!session || session.role !== "admin") {
+  const admin = await getAuthorizedAdmin();
+  if (!admin) {
     return NextResponse.json({ ok: false }, { status: 401 });
   }
 

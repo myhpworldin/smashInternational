@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
-import { verifySession } from "@/server/auth/dal";
+import { getAuthorizedAdmin } from "@/server/auth/dal";
 import { getForAdmin, listAssets } from "@/server/services/onboarding.service";
 
 export const runtime = "nodejs";
@@ -9,8 +9,8 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await verifySession();
-  if (!session || session.role !== "admin") {
+  const admin = await getAuthorizedAdmin();
+  if (!admin) {
     return NextResponse.json({ ok: false }, { status: 401 });
   }
 

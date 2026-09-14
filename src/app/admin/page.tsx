@@ -25,12 +25,20 @@ export default async function AdminDashboardPage() {
         ))}
       </div>
 
-      <Link
-        href="/admin/onboarding"
-        className="self-start rounded-none bg-white px-[18px] py-[14px] font-body text-sm text-void focus-visible:-outline-offset-2"
-      >
-        {totalSubmissions === 0 ? "View onboarding submissions" : `View all ${totalSubmissions} submissions`}
-      </Link>
+      <div className="flex flex-wrap gap-3">
+        <Link
+          href="/admin/onboarding"
+          className="rounded-none bg-white px-[18px] py-[14px] font-body text-sm text-void focus-visible:-outline-offset-2"
+        >
+          {totalSubmissions === 0 ? "View onboarding submissions" : `View all ${totalSubmissions} submissions`}
+        </Link>
+        <Link
+          href="/admin/users"
+          className="rounded-none border border-white/15 bg-carbon px-[18px] py-[14px] font-body text-sm text-bone hover:border-white/30 focus-visible:-outline-offset-2"
+        >
+          Manage users
+        </Link>
+      </div>
     </main>
   );
 }

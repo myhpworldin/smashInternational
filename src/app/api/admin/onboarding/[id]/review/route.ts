@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
-import { verifySession, getCurrentUser } from "@/server/auth/dal";
+import { getAuthorizedAdmin } from "@/server/auth/dal";
 import { reviewDecisionSchema } from "@/shared/validation/onboarding";
 import { reviewSubmission } from "@/server/services/onboarding.service";
 
@@ -10,12 +10,7 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await verifySession();
-  if (!session || session.role !== "admin") {
-    return NextResponse.json({ ok: false }, { status: 401 });
-  }
-
-  const admin = await getCurrentUser();
+  const admin = await getAuthorizedAdmin();
   if (!admin) {
     return NextResponse.json({ ok: false }, { status: 401 });
   }
