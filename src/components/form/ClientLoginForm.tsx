@@ -9,6 +9,7 @@ import ChipGroupField from "@/components/form/fields/ChipGroupField";
 import OtpInput from "@/components/form/fields/OtpInput";
 import { useLoginStore } from "@/store/useLoginStore";
 import { sendLoginOtp, verifyLoginOtp } from "@/lib/otp/loginTransport";
+import { resendSignupOtp } from "@/lib/otp/signupTransport";
 import { identifierError } from "@/lib/form/identifier";
 import { writeMockClientSession } from "@/lib/mock/clientSession";
 import { determineClientDestination } from "@/lib/routing/clientDestination";
@@ -35,7 +36,9 @@ export default function ClientLoginForm() {
   const storeStatus = useLoginStore((s) => s.status);
   const storeMessage = useLoginStore((s) => s.message);
   const storeErrorKind = useLoginStore((s) => s.errorKind);
+  const unverifiedEmail = useLoginStore((s) => s.unverifiedEmail);
   const submitPassword = useLoginStore((s) => s.submit);
+  const [resendingVerification, setResendingVerification] = useState(false);
 
   const [method, setMethod] = useState<Method>("password");
   const [identifier, setIdentifier] = useState("");
@@ -150,6 +153,17 @@ export default function ClientLoginForm() {
     void handleSendOtp();
   };
 
+  // Only reachable after a *correct* password was submitted (see the
+  // login route's comment on why exposing "unverified" this way is
+  // safe) — a direct path out of the dead end "verify your email" used
+  // to leave the user in, instead of making them rediscover /signup.
+  const handleResendVerification = async () => {
+    if (!unverifiedEmail || resendingVerification) return;
+    setResendingVerification(true);
+    await resendSignupOtp(unverifiedEmail);
+    router.push(`/verify-email?email=${encodeURIComponent(unverifiedEmail)}`);
+  };
+
   if (forcedPasswordChangeRequired) {
     return <ChangePasswordModal />;
   }
@@ -198,11 +212,24 @@ export default function ClientLoginForm() {
           </button>
 
           {storeStatus === "error" && storeMessage && (
-            <p role="alert" className="font-body text-xs text-smash-text">
-              {storeErrorKind === "network"
-                ? "Couldn't reach the server. Check your connection and try again."
-                : storeMessage}
-            </p>
+            <div className="flex flex-col gap-2">
+              <p role="alert" className="font-body text-xs text-smash-text">
+                {storeErrorKind === "network"
+                  ? "Couldn't reach the server. Check your connection and try again."
+                  : storeMessage}
+              </p>
+              {storeErrorKind === "unverified" && (
+                <button
+                  type="button"
+                  onClick={handleResendVerification}
+                  disabled={resendingVerification}
+                  aria-busy={resendingVerification}
+                  className="self-start rounded-none border border-carbon bg-carbon px-[18px] py-[14px] font-body text-sm text-bone hover:border-ash disabled:opacity-60 focus-visible:-outline-offset-2"
+                >
+                  {resendingVerification ? "Sending" : "Resend verification email"}
+                </button>
+              )}
+            </div>
           )}
         </form>
       ) : (

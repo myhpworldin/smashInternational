@@ -23,7 +23,13 @@ export async function POST(request: NextRequest) {
         result.reason === "unverified"
           ? "Verify your email before logging in."
           : "Incorrect email or password.";
-      return NextResponse.json({ ok: false, message }, { status: 401 });
+      // `reason` is only ever "unverified" once verifyPassword has
+      // already succeeded (see login() in auth.service.ts) — it can't be
+      // used to probe whether an email has an account without already
+      // knowing its password, so exposing it here (rather than folding
+      // it into the message string) is safe the same way the message
+      // itself already was.
+      return NextResponse.json({ ok: false, message, reason: result.reason }, { status: 401 });
     }
 
     return NextResponse.json(
