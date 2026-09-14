@@ -26,7 +26,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, message }, { status: 401 });
     }
 
-    return NextResponse.json({ ok: true, role: result.role }, { status: 200 });
+    return NextResponse.json(
+      { ok: true, role: result.role, mustChangePassword: result.mustChangePassword },
+      { status: 200 },
+    );
   } catch (error) {
     console.error("[auth/login] failed:", error);
     return NextResponse.json(

@@ -46,3 +46,15 @@ export type ResendOtpInput = z.infer<typeof resendOtpSchema>;
 // signupRequestSchema above.
 export const loginOtpRequestSchema = resendOtpSchema;
 export const loginOtpVerifySchema = verifyOtpSchema;
+
+// Same length policy as login/signup passwords — Stage 2 Phase 5 doesn't
+// introduce a stricter complexity rule, just reuses this one for the
+// mandatory first-login/post-reset password change.
+export const changePasswordSchema = z
+  .object({
+    newPassword: z.string().check(z.minLength(8), z.maxLength(200)),
+    confirmPassword: z.string().check(z.minLength(8), z.maxLength(200)),
+  })
+  .check(z.refine((val) => val.newPassword === val.confirmPassword, "Passwords do not match"));
+
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;

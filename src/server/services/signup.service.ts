@@ -12,6 +12,7 @@ import {
   OTP_MAX_ATTEMPTS,
 } from "@/server/auth/otp";
 import { sendEmail } from "@/lib/email/sendEmail";
+import { signupVerificationEmail, duplicateAccountEmail } from "@/lib/email/templates";
 
 export type SignupResult = { ok: true } | { ok: false; errors: string[] };
 
@@ -27,11 +28,8 @@ async function dispatchOtp(userId: ObjectId, email: string): Promise<void> {
     attempts: 0,
     lastSentAt: new Date(),
   });
-  await sendEmail({
-    to: email,
-    subject: "Your SMASH verification code",
-    text: `Your verification code is ${code}. It expires in 5 minutes.`,
-  });
+  const content = signupVerificationEmail(code, OTP_VALIDITY_MS / 60_000);
+  await sendEmail({ to: email, ...content });
 }
 
 // Duplicate accounts: a verified email never gets a second account, and a
@@ -45,11 +43,7 @@ export async function signup(email: string, password: string): Promise<SignupRes
   const existing = await usersRepo.findByEmail(email);
 
   if (existing?.emailVerified) {
-    await sendEmail({
-      to: email,
-      subject: "You already have a SMASH account",
-      text: "Someone tried to sign up with this email, but an account already exists. If this was you, log in instead.",
-    });
+    await sendEmail({ to: email, ...duplicateAccountEmail() });
     return { ok: true };
   }
 
@@ -119,6 +113,6 @@ export async function verifyOtp(email: string, code: string): Promise<SignupResu
   // flips the account to verified, so a replayed request with the same
   // code can never succeed twice.
   await usersRepo.markEmailVerified(user._id);
-  await createSession(user._id.toHexString(), "client");
+  await createSession(user._id.toHexString(), "client", user.sessionVersion ?? 1);
   return { ok: true };
 }

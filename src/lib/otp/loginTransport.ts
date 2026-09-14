@@ -5,7 +5,7 @@
 // model (UserDoc has no phone field) — this only covers email.
 export type SendOtpResult = { ok: true } | { ok: false; reason: "network" };
 export type VerifyOtpResult =
-  | { ok: true; role: "admin" | "client" }
+  | { ok: true; role: "admin" | "client"; mustChangePassword: boolean }
   | { ok: false; reason: "invalid" | "network" };
 
 export async function sendLoginOtp(email: string): Promise<SendOtpResult> {
@@ -31,7 +31,9 @@ export async function verifyLoginOtp(email: string, code: string): Promise<Verif
     });
     const data = await response.json().catch(() => null);
 
-    if (response.ok && data?.ok) return { ok: true, role: data.role };
+    if (response.ok && data?.ok) {
+      return { ok: true, role: data.role, mustChangePassword: Boolean(data.mustChangePassword) };
+    }
     if (response.status === 429) return { ok: false, reason: "network" };
     return { ok: false, reason: "invalid" };
   } catch {

@@ -12,6 +12,7 @@ import { sendLoginOtp, verifyLoginOtp } from "@/lib/otp/loginTransport";
 import { identifierError } from "@/lib/form/identifier";
 import { writeMockClientSession } from "@/lib/mock/clientSession";
 import { determineClientDestination } from "@/lib/routing/clientDestination";
+import ChangePasswordModal from "@/components/auth/ChangePasswordModal";
 
 type Method = "password" | "otp";
 type OtpPhase = "idle" | "sending" | "otp_required" | "otp_verification" | "network_error" | "success";
@@ -46,6 +47,12 @@ export default function ClientLoginForm() {
   const [otpInvalid, setOtpInvalid] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
 
+  // Set the moment a login succeeds with mustChangePassword still true —
+  // once set, nothing below navigates anywhere until the modal itself
+  // does (Phase 5 spec, §2: no normal navigation before the password is
+  // replaced).
+  const [forcedPasswordChangeRequired, setForcedPasswordChangeRequired] = useState(false);
+
   useEffect(() => {
     if (resendCooldown === 0) return;
     const interval = setInterval(() => setResendCooldown((s) => Math.max(s - 1, 0)), 1000);
@@ -71,9 +78,16 @@ export default function ClientLoginForm() {
     }
     setFieldErrors({});
 
-    const role = await submitPassword(identifier, password);
-    if (role === "admin") router.push("/admin");
-    else if (role === "client") {
+    const result = await submitPassword(identifier, password);
+    if (!result) return;
+
+    if (result.mustChangePassword) {
+      setForcedPasswordChangeRequired(true);
+      return;
+    }
+
+    if (result.role === "admin") router.push("/admin");
+    else if (result.role === "client") {
       writeMockClientSession({ role: "client" });
       router.push(await determineClientDestination());
     }
@@ -109,6 +123,10 @@ export default function ClientLoginForm() {
 
     const result = await verifyLoginOtp(identifier.trim(), code);
     if (result.ok) {
+      if (result.mustChangePassword) {
+        setForcedPasswordChangeRequired(true);
+        return;
+      }
       setOtpPhase("success");
       if (result.role === "admin") {
         setTimeout(() => router.push("/admin"), 600);
@@ -131,6 +149,10 @@ export default function ClientLoginForm() {
     setOtpDigits(Array(OTP_LENGTH).fill(""));
     void handleSendOtp();
   };
+
+  if (forcedPasswordChangeRequired) {
+    return <ChangePasswordModal />;
+  }
 
   return (
     <div className="flex w-full max-w-sm flex-col gap-5">

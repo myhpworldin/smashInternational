@@ -25,7 +25,10 @@ export async function POST(request: NextRequest) {
     if (!result.ok) {
       return NextResponse.json({ ok: false, errors: result.errors }, { status: 401 });
     }
-    return NextResponse.json({ ok: true, role: result.role }, { status: 200 });
+    return NextResponse.json(
+      { ok: true, role: result.role, mustChangePassword: result.mustChangePassword },
+      { status: 200 },
+    );
   } catch (error) {
     console.error("[auth/login/verify-otp] failed:", error);
     return NextResponse.json(

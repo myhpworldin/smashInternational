@@ -6,11 +6,13 @@ type Status = "idle" | "submitting" | "error";
 // status/message and are unaffected by this new field.
 type ErrorKind = "validation" | "credentials" | "network" | null;
 
+export type LoginSubmitResult = { role: string; mustChangePassword: boolean };
+
 type LoginState = {
   status: Status;
   message: string | null;
   errorKind: ErrorKind;
-  submit: (email: string, password: string) => Promise<string | null>;
+  submit: (email: string, password: string) => Promise<LoginSubmitResult | null>;
 };
 
 const INVALID_MESSAGE = "Enter a valid email and password.";
@@ -46,7 +48,7 @@ export const useLoginStore = create<LoginState>((set, get) => ({
       }
 
       set({ status: "idle", message: null, errorKind: null });
-      return data.role as string;
+      return { role: data.role as string, mustChangePassword: Boolean(data.mustChangePassword) };
     } catch {
       set({
         status: "error",

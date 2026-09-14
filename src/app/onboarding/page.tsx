@@ -5,6 +5,7 @@ import ProtectedClientRoute from "@/components/auth/ProtectedClientRoute";
 import StepTransition from "@/components/onboarding/StepTransition";
 import type { OnboardingDraft } from "@/store/useOnboardingDraftStore";
 import type { CompanyInput } from "@/shared/validation/onboarding";
+import { blockIfPasswordChangeRequired } from "@/server/auth/dal";
 
 // As of Stage 1 Phase 6, this page requires the mock client auth state
 // (see ProtectedClientRoute) — that's a routing-layer gate only, added
@@ -20,6 +21,12 @@ export const dynamic = "force-dynamic";
 const LOCKED_STATUSES = new Set(["submitted", "under_review", "approved"]);
 
 export default async function OnboardingPage() {
+  // Real-session check, ahead of resolveOnboardingIdentity — a no-op for
+  // an anonymous visitor (no real session at all); only redirects a
+  // logged-in account that still owes a mandatory password change
+  // (Phase 5 spec, §4/§5).
+  await blockIfPasswordChangeRequired();
+
   const { doc } = await resolveOnboardingIdentity();
 
   if (LOCKED_STATUSES.has(doc.status)) {
