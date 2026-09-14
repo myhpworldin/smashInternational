@@ -13,6 +13,11 @@ export type SendEmailInput = {
   to: string;
   subject: string;
   text: string;
+  // Optional structured/styled body (see src/lib/email/templates.ts) —
+  // `text` stays required regardless, both because Resend/most clients
+  // want a plain-text alternative for deliverability, and because it's
+  // what the unconfigured-provider console fallback below prints.
+  html?: string;
 };
 
 export async function sendEmail(input: SendEmailInput): Promise<{ ok: boolean }> {
@@ -36,6 +41,7 @@ export async function sendEmail(input: SendEmailInput): Promise<{ ok: boolean }>
         to: input.to,
         subject: input.subject,
         text: input.text,
+        ...(input.html ? { html: input.html } : {}),
       }),
     });
 
