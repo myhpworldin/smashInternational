@@ -17,7 +17,16 @@ export function getMongoClient(): Promise<MongoClient> {
       throw new Error("Missing MONGODB_URI environment variable");
     }
 
-    const clientPromise = new MongoClient(uri).connect();
+    const clientPromise = new MongoClient(uri, {
+      // Driver defaults to 30s here — long enough that a genuine outage
+      // (or a stale DNS/network state on a machine that just woke up,
+      // switched networks, etc.) leaves a real request hanging for half
+      // a minute before the caller ever sees an error. 8s is still
+      // generous for a brief blip to clear on its own, but fails fast
+      // enough that a user gets a "try again" response instead of a
+      // long silent wait.
+      serverSelectionTimeoutMS: 8000,
+    }).connect();
     globalForMongo._mongoClientPromise = clientPromise;
 
     // A Promise is truthy whether it resolves or rejects, so without this
