@@ -76,8 +76,22 @@ export default function ServiceRequirementsStep({
     }));
   };
 
-  const errorsForService = (serviceId: string) =>
-    generalErrors.filter((e) => e.startsWith(`${serviceId}:`));
+  // Field-level errors are formatted as "serviceId.fieldKey: ..." so they can
+  // be routed to the exact field that failed instead of being dumped under
+  // the whole service card (where they'd visually attach to whichever field
+  // happens to render last).
+  const fieldErrorFor = (serviceId: string, fieldKey: string) => {
+    const prefix = `${serviceId}.${fieldKey}:`;
+    const raw = generalErrors.find((e) => e.startsWith(prefix));
+    if (!raw) return undefined;
+    // Strip the routing prefix and the redundant field label — FieldShell
+    // already renders the label, so the error only needs to add "is
+    // required" / "has an invalid value".
+    return raw.slice(prefix.length).replace(/\s*".*?"\s*/, " ").trim();
+  };
+
+  const serviceLevelErrorsFor = (serviceId: string) =>
+    generalErrors.filter((e) => e.startsWith(`${serviceId}:`) && !e.startsWith(`${serviceId}.`));
 
   const handleContinue = () => {
     const entries: ServiceResponseEntry[] = selectedServiceIds.map((id) => ({
@@ -150,9 +164,10 @@ export default function ServiceRequirementsStep({
               field={field}
               value={responsesByService[service!.id]?.[field.key]}
               onChange={(v) => setFieldValue(service!.id, field.key, v)}
+              error={fieldErrorFor(service!.id, field.key)}
             />
           ))}
-          {errorsForService(service!.id).map((err) => (
+          {serviceLevelErrorsFor(service!.id).map((err) => (
             <p key={err} role="alert" className="font-body text-xs text-smash-text">
               {err}
             </p>

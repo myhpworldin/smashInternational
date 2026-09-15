@@ -33,10 +33,14 @@ const MAX_TAG_ARRAY_LENGTH = 50;
 
 // Used both for companySchema.website and for the catalog's generic "url"
 // field type (see fieldValueLooksValid) — accepts http(s) URLs only.
+// Users routinely type social/website links without a scheme ("www.test.com",
+// "instagram.com/brand"), so a bare domain is treated as shorthand for its
+// https:// form rather than rejected outright.
 function isValidUrl(value: string): boolean {
+  const candidate = /^https?:\/\//i.test(value) ? value : `https://${value}`;
   try {
-    const url = new URL(value);
-    return url.protocol === "http:" || url.protocol === "https:";
+    const url = new URL(candidate);
+    return (url.protocol === "http:" || url.protocol === "https:") && url.hostname.includes(".");
   } catch {
     return false;
   }
@@ -262,13 +266,13 @@ export function validateServiceResponses(
 
       if (value === undefined || value === null || value === "") {
         if (field.required) {
-          errors.push(`${entry.serviceId}: "${field.label}" is required`);
+          errors.push(`${entry.serviceId}.${field.key}: "${field.label}" is required`);
         }
         continue;
       }
 
       if (!fieldValueLooksValid(field.type, value, field.options)) {
-        errors.push(`${entry.serviceId}: "${field.label}" has an invalid value`);
+        errors.push(`${entry.serviceId}.${field.key}: "${field.label}" has an invalid value`);
       }
     }
 
