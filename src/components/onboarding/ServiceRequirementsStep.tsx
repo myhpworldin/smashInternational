@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import {
   getServiceById,
+  isFieldActive,
   selectedServicesNeedBrandProfile,
   selectedServicesNeedAssets,
 } from "@/shared/config/services";
@@ -70,10 +71,21 @@ export default function ServiceRequirementsStep({
   );
 
   const setFieldValue = (serviceId: string, key: string, value: unknown) => {
-    setResponsesByService((prev) => ({
-      ...prev,
-      [serviceId]: { ...prev[serviceId], [key]: value },
-    }));
+    setResponsesByService((prev) => {
+      const nextResponses = { ...prev[serviceId], [key]: value };
+
+      // Changing a controlling field (e.g. "Has an existing website") can
+      // hide a dependent field — drop its stale value so it isn't silently
+      // carried forward (and re-validated) once it's no longer shown.
+      const service = getServiceById(serviceId);
+      for (const field of service?.fields ?? []) {
+        if (field.dependsOn?.key === key && !isFieldActive(field, nextResponses)) {
+          delete nextResponses[field.key];
+        }
+      }
+
+      return { ...prev, [serviceId]: nextResponses };
+    });
   };
 
   // Field-level errors are formatted as "serviceId.fieldKey: ..." so they can
@@ -158,15 +170,17 @@ export default function ServiceRequirementsStep({
       {services.map((service) => (
         <div key={service!.id} className="flex flex-col gap-4 border border-carbon p-4">
           <h3 className="font-body text-xs tracking-[0.14em] text-ash uppercase">{service!.label}</h3>
-          {service!.fields.map((field) => (
-            <ServiceFieldRenderer
-              key={field.key}
-              field={field}
-              value={responsesByService[service!.id]?.[field.key]}
-              onChange={(v) => setFieldValue(service!.id, field.key, v)}
-              error={fieldErrorFor(service!.id, field.key)}
-            />
-          ))}
+          {service!.fields
+            .filter((field) => isFieldActive(field, responsesByService[service!.id] ?? {}))
+            .map((field) => (
+              <ServiceFieldRenderer
+                key={field.key}
+                field={field}
+                value={responsesByService[service!.id]?.[field.key]}
+                onChange={(v) => setFieldValue(service!.id, field.key, v)}
+                error={fieldErrorFor(service!.id, field.key)}
+              />
+            ))}
           {serviceLevelErrorsFor(service!.id).map((err) => (
             <p key={err} role="alert" className="font-body text-xs text-smash-text">
               {err}

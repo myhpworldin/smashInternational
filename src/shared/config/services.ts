@@ -35,7 +35,19 @@ export type ServiceFieldDef = {
   type: ServiceFieldType;
   required: boolean;
   options?: ServiceFieldOption[]; // required for "select" | "multiselect"
+  // When set, this field is only shown — and its `required` only enforced —
+  // once the named field's response strictly equals `equals`. Otherwise it's
+  // hidden and any stored value for it is ignored by validation.
+  dependsOn?: { key: string; equals: unknown };
 };
+
+// True when a field's dependsOn condition (if any) is satisfied by the
+// current responses for that service — shared by the UI (what to render)
+// and validation (what to enforce as required).
+export function isFieldActive(field: ServiceFieldDef, responses: Record<string, unknown>): boolean {
+  if (!field.dependsOn) return true;
+  return responses[field.dependsOn.key] === field.dependsOn.equals;
+}
 
 export type ServiceDef = {
   id: string;
@@ -196,7 +208,13 @@ export const SERVICES: ServiceDef[] = [
     category: "technology",
     fields: [
       { key: "hasExistingWebsite", label: "Has an existing website", type: "boolean", required: true },
-      { key: "existingWebsiteUrl", label: "Existing website URL", type: "url", required: false },
+      {
+        key: "existingWebsiteUrl",
+        label: "Existing website URL",
+        type: "url",
+        required: true,
+        dependsOn: { key: "hasExistingWebsite", equals: true },
+      },
       { key: "pagesRequired", label: "Pages required", type: "number", required: false },
       { key: "featuresRequired", label: "Features required", type: "textarea", required: false },
     ],

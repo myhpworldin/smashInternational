@@ -1,6 +1,7 @@
 import * as z from "zod/mini";
 import {
   getServiceById,
+  isFieldActive,
   isValidServiceId,
   selectedServicesNeedBrandProfile,
   selectedServicesNeedBudget,
@@ -262,6 +263,8 @@ export function validateServiceResponses(
     }
 
     for (const field of service.fields) {
+      if (!isFieldActive(field, entry.responses)) continue;
+
       const value = entry.responses[field.key];
 
       if (value === undefined || value === null || value === "") {
