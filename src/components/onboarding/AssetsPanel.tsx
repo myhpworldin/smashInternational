@@ -18,6 +18,18 @@ type Asset = {
 
 type UploadState = { fileName: string; progress: number; error: string | null };
 
+// Short, beginner-friendly guidance per category — shown next to the file
+// picker since a native <input type="file"> has no placeholder of its own.
+const UPLOAD_GUIDANCE: Record<AssetType, string> = {
+  logo: "Upload your company logo",
+  brand_guidelines: "Upload your brand guideline document",
+  product_images: "Upload clear images of your products",
+  videos: "Upload your product or brand videos",
+  existing_creatives: "Upload previous advertisements or social media designs",
+  brochures: "Upload your brochure (PDF)",
+  catalogues: "Upload your product catalogue (PDF)",
+};
+
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -219,6 +231,7 @@ export default function AssetsPanel() {
           className="font-body text-xs text-ash"
         />
       </div>
+      <p className="font-body text-xs text-ash">{UPLOAD_GUIDANCE[assetType]}</p>
     </div>
   );
 }

@@ -8,7 +8,9 @@ type TagsFieldProps = {
   error?: string;
   value: string[];
   onChange: (value: string[]) => void;
+  onBlur?: () => void;
   placeholder?: string;
+  fieldRef?: (el: HTMLDivElement | null) => void;
 };
 
 // Free-text chip list (e.g. business locations, interests) — press Enter or
@@ -20,7 +22,9 @@ export default function TagsField({
   error,
   value,
   onChange,
+  onBlur,
   placeholder,
+  fieldRef,
 }: TagsFieldProps) {
   const [draft, setDraft] = useState("");
 
@@ -48,7 +52,7 @@ export default function TagsField({
   };
 
   return (
-    <FieldShell label={label} description={description} required={required} error={error}>
+    <FieldShell label={label} description={description} required={required} error={error} fieldRef={fieldRef}>
       {(controlId, describedBy) => (
         <div className="flex flex-wrap items-center gap-2 border border-carbon bg-carbon px-2 py-2">
           {value.map((tag, index) => (
@@ -73,7 +77,10 @@ export default function TagsField({
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={handleKeyDown}
-            onBlur={commit}
+            onBlur={() => {
+              commit();
+              onBlur?.();
+            }}
             placeholder={value.length === 0 ? placeholder : undefined}
             aria-describedby={describedBy}
             aria-invalid={Boolean(error)}

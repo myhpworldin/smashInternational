@@ -25,7 +25,8 @@ export type ServiceFieldType =
   | "url"
   | "select"
   | "multiselect"
-  | "tags"; // free-text list, e.g. "other platforms" or "target locations"
+  | "tags" // free-text list, e.g. "other platforms" or "target locations"
+  | "groupList"; // repeatable set of sub-fields, e.g. one entry per campaign objective
 
 export type ServiceFieldOption = { value: string; label: string };
 
@@ -39,6 +40,18 @@ export type ServiceFieldDef = {
   // once the named field's response strictly equals `equals`. Otherwise it's
   // hidden and any stored value for it is ignored by validation.
   dependsOn?: { key: string; equals: unknown };
+  // Required for "groupList" — the fields collected per entry. A groupList's
+  // stored value is an array of these sub-field records, one per entry the
+  // client adds (e.g. one per campaign objective), rather than a single value.
+  groupFields?: ServiceFieldDef[];
+  // Singular noun for a groupList's entries, used in UI copy ("Add another
+  // campaign", "Campaign 2"). Defaults to the field's own label.
+  entryLabel?: string;
+  // Beginner-friendly example/guidance shown as the input's placeholder —
+  // only meaningful for text-entry types ("text" | "textarea" | "number" |
+  // "url" | "tags"); ignored for "boolean" | "select" | "multiselect" |
+  // "groupList", which render as chip toggles with no text placeholder.
+  placeholder?: string;
 };
 
 // True when a field's dependsOn condition (if any) is satisfied by the
@@ -73,18 +86,57 @@ const CAMPAIGN_OBJECTIVE_OPTIONS: ServiceFieldOption[] = [
   { value: "app_promotion", label: "App Promotion" },
 ];
 
-const ADVERTISING_FIELDS: ServiceFieldDef[] = [
+// Per-objective details — one full set of these per entry in the
+// "campaigns" groupList below, so a client running both a Leads campaign
+// and a Sales campaign can give each its own product, audience, etc.
+// instead of one flat set of fields shared across every objective.
+const CAMPAIGN_GROUP_FIELDS: ServiceFieldDef[] = [
   {
-    key: "campaignObjective",
+    key: "objective",
     label: "Campaign objective",
     type: "select",
     required: true,
     options: CAMPAIGN_OBJECTIVE_OPTIONS,
   },
-  { key: "targetLocation", label: "Target location", type: "tags", required: false },
-  { key: "audience", label: "Audience", type: "textarea", required: false },
-  { key: "productOrService", label: "Product / service to promote", type: "text", required: true },
-  { key: "targetCustomer", label: "Target customer", type: "textarea", required: false },
+  {
+    key: "targetLocation",
+    label: "Target location",
+    type: "tags",
+    required: false,
+    placeholder: "e.g., Kochi, Kerala — press Enter to add",
+  },
+  {
+    key: "audience",
+    label: "Audience",
+    type: "textarea",
+    required: false,
+    placeholder: "e.g., Women aged 25–40 interested in fitness",
+  },
+  {
+    key: "productOrService",
+    label: "Product / service to promote",
+    type: "text",
+    required: true,
+    placeholder: "e.g., Your new spring collection",
+  },
+  {
+    key: "targetCustomer",
+    label: "Target customer",
+    type: "textarea",
+    required: false,
+    placeholder: "e.g., First-time buyers, repeat customers",
+  },
+];
+
+const ADVERTISING_FIELDS: ServiceFieldDef[] = [
+  {
+    key: "campaigns",
+    label: "Campaigns",
+    type: "groupList",
+    required: true,
+    groupFields: CAMPAIGN_GROUP_FIELDS,
+    entryLabel: "Campaign",
+  },
 ];
 
 export const SERVICES: ServiceDef[] = [
@@ -97,17 +149,77 @@ export const SERVICES: ServiceDef[] = [
     needsAssets: true,
     fields: [
       // Account details
-      { key: "instagramUrl", label: "Instagram", type: "url", required: false },
-      { key: "facebookUrl", label: "Facebook", type: "url", required: false },
-      { key: "youtubeUrl", label: "YouTube", type: "url", required: false },
-      { key: "linkedinUrl", label: "LinkedIn", type: "url", required: false },
-      { key: "otherPlatforms", label: "Other platforms", type: "tags", required: false },
+      {
+        key: "instagramUrl",
+        label: "Instagram",
+        type: "url",
+        required: false,
+        placeholder: "e.g., https://instagram.com/yourbrand",
+      },
+      {
+        key: "facebookUrl",
+        label: "Facebook",
+        type: "url",
+        required: false,
+        placeholder: "e.g., https://facebook.com/yourbrand",
+      },
+      {
+        key: "youtubeUrl",
+        label: "YouTube",
+        type: "url",
+        required: false,
+        placeholder: "e.g., https://youtube.com/@yourbrand",
+      },
+      {
+        key: "linkedinUrl",
+        label: "LinkedIn",
+        type: "url",
+        required: false,
+        placeholder: "e.g., https://linkedin.com/company/yourbrand",
+      },
+      {
+        key: "otherPlatforms",
+        label: "Other platforms",
+        type: "tags",
+        required: false,
+        placeholder: "e.g., Pinterest, Threads — press Enter to add",
+      },
       // Content
-      { key: "contentPreferences", label: "Content preferences", type: "textarea", required: false },
-      { key: "importantProducts", label: "Important products to feature", type: "textarea", required: false },
-      { key: "upcomingOffers", label: "Upcoming offers", type: "textarea", required: false },
-      { key: "events", label: "Events", type: "textarea", required: false },
-      { key: "importantDates", label: "Important dates", type: "textarea", required: false },
+      {
+        key: "contentPreferences",
+        label: "Content preferences",
+        type: "textarea",
+        required: false,
+        placeholder: "Tell us what type of content you want to publish",
+      },
+      {
+        key: "importantProducts",
+        label: "Important products to feature",
+        type: "textarea",
+        required: false,
+        placeholder: "e.g., Your bestsellers or seasonal items",
+      },
+      {
+        key: "upcomingOffers",
+        label: "Upcoming offers",
+        type: "textarea",
+        required: false,
+        placeholder: "e.g., Onam sale, festive discount, new product launch",
+      },
+      {
+        key: "events",
+        label: "Events",
+        type: "textarea",
+        required: false,
+        placeholder: "e.g., Store anniversary, product launch event",
+      },
+      {
+        key: "importantDates",
+        label: "Important dates",
+        type: "textarea",
+        required: false,
+        placeholder: "e.g., festival dates, product launches, special events",
+      },
     ],
   },
   {
@@ -146,8 +258,20 @@ export const SERVICES: ServiceDef[] = [
     label: "SEO",
     category: "digital_marketing",
     fields: [
-      { key: "targetKeywords", label: "Target keywords", type: "textarea", required: false },
-      { key: "competitorWebsites", label: "Competitor websites", type: "textarea", required: false },
+      {
+        key: "targetKeywords",
+        label: "Target keywords",
+        type: "textarea",
+        required: false,
+        placeholder: "e.g., best bakery in Kochi, online cake delivery",
+      },
+      {
+        key: "competitorWebsites",
+        label: "Competitor websites",
+        type: "textarea",
+        required: false,
+        placeholder: "e.g., competitorsite.com — one per line",
+      },
     ],
   },
 
@@ -160,8 +284,20 @@ export const SERVICES: ServiceDef[] = [
     requiresBrandProfile: true,
     needsAssets: true,
     fields: [
-      { key: "designsPerWeek", label: "Designs needed per week", type: "number", required: false },
-      { key: "preferredStyle", label: "Preferred style", type: "text", required: false },
+      {
+        key: "designsPerWeek",
+        label: "Designs needed per week",
+        type: "number",
+        required: false,
+        placeholder: "e.g., 5",
+      },
+      {
+        key: "preferredStyle",
+        label: "Preferred style",
+        type: "text",
+        required: false,
+        placeholder: "e.g., Minimal and modern, bold and colorful",
+      },
     ],
   },
   {
@@ -171,9 +307,21 @@ export const SERVICES: ServiceDef[] = [
     requiresBrandProfile: true,
     needsAssets: true,
     fields: [
-      { key: "videosPerMonth", label: "Videos needed per month", type: "number", required: false },
+      {
+        key: "videosPerMonth",
+        label: "Videos needed per month",
+        type: "number",
+        required: false,
+        placeholder: "e.g., 2",
+      },
       { key: "scriptSupportNeeded", label: "Script support needed", type: "boolean", required: true },
-      { key: "referenceLinks", label: "Reference links", type: "textarea", required: false },
+      {
+        key: "referenceLinks",
+        label: "Reference links",
+        type: "textarea",
+        required: false,
+        placeholder: "e.g., links to videos or ads you like",
+      },
     ],
   },
   {
@@ -183,9 +331,27 @@ export const SERVICES: ServiceDef[] = [
     requiresBrandProfile: true,
     needsAssets: true,
     fields: [
-      { key: "useCase", label: "Use case", type: "text", required: false },
-      { key: "voiceoverLanguage", label: "Voiceover language", type: "text", required: false },
-      { key: "referenceLinks", label: "Reference links", type: "textarea", required: false },
+      {
+        key: "useCase",
+        label: "Use case",
+        type: "text",
+        required: false,
+        placeholder: "e.g., Product demo, social media ad",
+      },
+      {
+        key: "voiceoverLanguage",
+        label: "Voiceover language",
+        type: "text",
+        required: false,
+        placeholder: "e.g., English, Hindi, Malayalam",
+      },
+      {
+        key: "referenceLinks",
+        label: "Reference links",
+        type: "textarea",
+        required: false,
+        placeholder: "e.g., links to videos or styles you like",
+      },
     ],
   },
   {
@@ -195,9 +361,21 @@ export const SERVICES: ServiceDef[] = [
     requiresBrandProfile: true,
     needsAssets: true,
     fields: [
-      { key: "reelsPerMonth", label: "Reels needed per month", type: "number", required: false },
+      {
+        key: "reelsPerMonth",
+        label: "Reels needed per month",
+        type: "number",
+        required: false,
+        placeholder: "e.g., 4",
+      },
       { key: "shootLocationAvailable", label: "Shoot location available", type: "boolean", required: true },
-      { key: "contentThemes", label: "Content themes", type: "textarea", required: false },
+      {
+        key: "contentThemes",
+        label: "Content themes",
+        type: "textarea",
+        required: false,
+        placeholder: "e.g., Behind-the-scenes, product highlights",
+      },
     ],
   },
 
@@ -214,9 +392,22 @@ export const SERVICES: ServiceDef[] = [
         type: "url",
         required: true,
         dependsOn: { key: "hasExistingWebsite", equals: true },
+        placeholder: "e.g., https://www.yourbusiness.com",
       },
-      { key: "pagesRequired", label: "Pages required", type: "number", required: false },
-      { key: "featuresRequired", label: "Features required", type: "textarea", required: false },
+      {
+        key: "pagesRequired",
+        label: "Pages required",
+        type: "number",
+        required: false,
+        placeholder: "e.g., 5",
+      },
+      {
+        key: "featuresRequired",
+        label: "Features required",
+        type: "textarea",
+        required: false,
+        placeholder: "e.g., Online booking, payment gateway, blog",
+      },
     ],
   },
   {
@@ -224,9 +415,27 @@ export const SERVICES: ServiceDef[] = [
     label: "CRM Development",
     category: "technology",
     fields: [
-      { key: "currentProcess", label: "Current process", type: "textarea", required: false },
-      { key: "teamSize", label: "Team size", type: "number", required: false },
-      { key: "integrationsRequired", label: "Integrations required", type: "textarea", required: false },
+      {
+        key: "currentProcess",
+        label: "Current process",
+        type: "textarea",
+        required: false,
+        placeholder: "e.g., We track leads in a spreadsheet today",
+      },
+      {
+        key: "teamSize",
+        label: "Team size",
+        type: "number",
+        required: false,
+        placeholder: "e.g., 8",
+      },
+      {
+        key: "integrationsRequired",
+        label: "Integrations required",
+        type: "textarea",
+        required: false,
+        placeholder: "e.g., WhatsApp, email, payment gateway",
+      },
     ],
   },
   {
@@ -234,9 +443,27 @@ export const SERVICES: ServiceDef[] = [
     label: "CRM Integration",
     category: "technology",
     fields: [
-      { key: "existingCrmName", label: "Existing CRM", type: "text", required: true },
-      { key: "dataToMigrate", label: "Data to migrate", type: "textarea", required: false },
-      { key: "integrationTargets", label: "Systems to integrate with", type: "textarea", required: false },
+      {
+        key: "existingCrmName",
+        label: "Existing CRM",
+        type: "text",
+        required: true,
+        placeholder: "e.g., Zoho, HubSpot, Salesforce",
+      },
+      {
+        key: "dataToMigrate",
+        label: "Data to migrate",
+        type: "textarea",
+        required: false,
+        placeholder: "e.g., Contacts, deal history, notes",
+      },
+      {
+        key: "integrationTargets",
+        label: "Systems to integrate with",
+        type: "textarea",
+        required: false,
+        placeholder: "e.g., Your website, WhatsApp, email tool",
+      },
     ],
   },
 
@@ -246,7 +473,13 @@ export const SERVICES: ServiceDef[] = [
     label: "Call Centre Support",
     category: "customer_engagement",
     fields: [
-      { key: "expectedCallVolume", label: "Expected call volume (per month)", type: "number", required: false },
+      {
+        key: "expectedCallVolume",
+        label: "Expected call volume (per month)",
+        type: "number",
+        required: false,
+        placeholder: "e.g., 500",
+      },
       {
         key: "languagesRequired",
         label: "Languages required",
@@ -259,7 +492,13 @@ export const SERVICES: ServiceDef[] = [
           { value: "other", label: "Other" },
         ],
       },
-      { key: "operatingHours", label: "Operating hours", type: "text", required: false },
+      {
+        key: "operatingHours",
+        label: "Operating hours",
+        type: "text",
+        required: false,
+        placeholder: "e.g., 9 AM – 6 PM, Mon–Sat",
+      },
     ],
   },
   {
@@ -267,9 +506,27 @@ export const SERVICES: ServiceDef[] = [
     label: "Lead Management",
     category: "customer_engagement",
     fields: [
-      { key: "currentLeadSource", label: "Current lead sources", type: "textarea", required: false },
-      { key: "monthlyLeadVolume", label: "Monthly lead volume", type: "number", required: false },
-      { key: "crmInUse", label: "CRM currently in use", type: "text", required: false },
+      {
+        key: "currentLeadSource",
+        label: "Current lead sources",
+        type: "textarea",
+        required: false,
+        placeholder: "e.g., Website form, Instagram DMs, referrals",
+      },
+      {
+        key: "monthlyLeadVolume",
+        label: "Monthly lead volume",
+        type: "number",
+        required: false,
+        placeholder: "e.g., 50",
+      },
+      {
+        key: "crmInUse",
+        label: "CRM currently in use",
+        type: "text",
+        required: false,
+        placeholder: "e.g., None, or your current CRM name",
+      },
     ],
   },
 ];

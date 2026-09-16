@@ -11,6 +11,7 @@ import { getServiceById } from "@/shared/config/services";
 import { BUSINESS_OBJECTIVES, ASSET_TYPES, type AssetType } from "@/shared/types/onboarding";
 import { formatINR } from "@/lib/format/currency";
 import type { CompanyInput, ObjectivesInput, TargetAudienceInput, BudgetInput } from "@/shared/validation/onboarding";
+import ValidationSummary from "@/components/form/ValidationSummary";
 
 const STEP_LABELS: Record<OnboardingStepId, string> = {
   services: "Services",
@@ -58,6 +59,14 @@ export default function SummaryStep({
   const completeness = stepCompleteness(draft);
   const missingSteps = applicableSteps.filter((id) => !completeness[id]);
 
+  const handleSubmitClick = () => {
+    if (missingSteps.length > 0) {
+      onEditStep(missingSteps[0]);
+      return;
+    }
+    onSubmit();
+  };
+
   const services = draft.selectedServiceIds.map((id) => getServiceById(id)).filter((s) => s !== undefined);
   const responsesByService = new Map(draft.serviceResponses.map((r) => [r.serviceId, r.responses]));
 
@@ -70,25 +79,11 @@ export default function SummaryStep({
         </p>
       </div>
 
-      {missingSteps.length > 0 && (
-        <div className="flex flex-col gap-2 border border-smash-dim p-4">
-          <p className="font-body text-sm text-smash-text">Some required information is still missing:</p>
-          <ul className="flex flex-col gap-1">
-            {missingSteps.map((id) => (
-              <li key={id} className="flex items-center justify-between font-body text-sm text-bone">
-                {STEP_LABELS[id]}
-                <button
-                  type="button"
-                  onClick={() => onEditStep(id)}
-                  className="text-xs text-ash underline hover:text-bone focus-visible:-outline-offset-2"
-                >
-                  Edit
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <ValidationSummary
+        items={missingSteps.map((id) => ({ key: id, label: STEP_LABELS[id] }))}
+        onSelect={(key) => onEditStep(key as OnboardingStepId)}
+        title="Please complete the following sections before submitting."
+      />
 
       <SummaryRow label="Company" value={company?.name} onEdit={() => onEditStep("company")} />
       <SummaryRow
@@ -152,7 +147,18 @@ export default function SummaryStep({
             <div key={service!.id} className="font-body text-xs text-ash">
               <span className="text-bone">{service!.label}:</span>{" "}
               {filled.length > 0
-                ? filled.map((f) => `${f.label}: ${formatFieldValue(responses[f.key])}`).join(" · ")
+                ? filled
+                    .map((f) => {
+                      if (f.type === "groupList") {
+                        const entries = Array.isArray(responses[f.key])
+                          ? (responses[f.key] as unknown[])
+                          : [];
+                        const noun = (f.entryLabel ?? f.label).toLowerCase();
+                        return `${f.label}: ${entries.length} ${noun}${entries.length === 1 ? "" : "s"}`;
+                      }
+                      return `${f.label}: ${formatFieldValue(responses[f.key])}`;
+                    })
+                    .join(" · ")
                 : "No details entered"}
             </div>
           );
@@ -175,11 +181,6 @@ export default function SummaryStep({
       </div>
 
       <div className="flex flex-col gap-3 border-t border-carbon pt-4">
-        {missingSteps.length > 0 && (
-          <p className="font-body text-xs text-ash">
-            Complete the sections above before submitting.
-          </p>
-        )}
         {submitError && (
           <p role="alert" className="font-body text-xs text-smash-text">
             {submitError}
@@ -195,12 +196,12 @@ export default function SummaryStep({
           </button>
           <button
             type="button"
-            onClick={onSubmit}
-            disabled={missingSteps.length > 0 || submitting}
+            onClick={handleSubmitClick}
+            disabled={submitting}
             aria-busy={submitting}
             className="rounded-none bg-smash px-[18px] py-[14px] font-body text-white disabled:opacity-60 focus-visible:-outline-offset-2"
           >
-            {submitting ? "Submitting" : "Submit to SMASH"}
+            {submitting ? "Submitting" : missingSteps.length > 0 ? "Review missing sections" : "Submit to SMASH"}
           </button>
         </div>
       </div>

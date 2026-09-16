@@ -7,6 +7,25 @@ import TextAreaField from "@/components/form/fields/TextAreaField";
 import { targetAudienceSchema, type TargetAudienceInput } from "@/shared/validation/onboarding";
 import { AGE_GROUPS } from "@/shared/types/onboarding";
 import { issuesToFieldErrors } from "@/lib/form/zodErrors";
+import { useFieldRegistry } from "@/lib/form/useFieldRegistry";
+import ValidationSummary from "@/components/form/ValidationSummary";
+
+const FIELD_ORDER = [
+  "ageGroups",
+  "gender",
+  "locations",
+  "customerType",
+  "interests",
+  "existingCustomerProfile",
+] as const;
+const FIELD_LABELS: Record<(typeof FIELD_ORDER)[number], string> = {
+  ageGroups: "Age group",
+  gender: "Gender",
+  locations: "Location",
+  customerType: "Customer type",
+  interests: "Interests",
+  existingCustomerProfile: "Existing customer profile",
+};
 
 type TargetAudienceStepProps = {
   initialValue: Partial<TargetAudienceInput> | null;
@@ -47,24 +66,47 @@ export default function TargetAudienceStep({
     initialValue?.existingCustomerProfile ?? "",
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [attempt, setAttempt] = useState(0);
+  const { register, focusFirst } = useFieldRegistry();
+
+  const buildValue = () => ({
+    ageGroups,
+    gender,
+    locations,
+    customerType: customerType[0],
+    interests,
+    existingCustomerProfile,
+  });
+
+  const validateField = (key: (typeof FIELD_ORDER)[number]) => {
+    const parsed = targetAudienceSchema.safeParse(buildValue());
+    const fieldErrors = parsed.success ? {} : issuesToFieldErrors(parsed.error.issues);
+    setErrors((prev) => {
+      const next = { ...prev };
+      if (fieldErrors[key]) next[key] = fieldErrors[key];
+      else delete next[key];
+      return next;
+    });
+  };
 
   const handleContinue = () => {
-    const parsed = targetAudienceSchema.safeParse({
-      ageGroups,
-      gender,
-      locations,
-      customerType: customerType[0],
-      interests,
-      existingCustomerProfile,
-    });
+    const parsed = targetAudienceSchema.safeParse(buildValue());
     if (!parsed.success) {
-      setErrors(issuesToFieldErrors(parsed.error.issues));
+      const fieldErrors = issuesToFieldErrors(parsed.error.issues);
+      setErrors(fieldErrors);
+      setAttempt((a) => a + 1);
+      focusFirst(FIELD_ORDER.filter((key) => fieldErrors[key]));
       return;
     }
     setErrors({});
     if (saving) return;
     void onNext(parsed.data);
   };
+
+  const summaryItems = FIELD_ORDER.filter((key) => errors[key]).map((key) => ({
+    key,
+    label: FIELD_LABELS[key],
+  }));
 
   return (
     <div className="flex flex-col gap-6">
@@ -82,6 +124,7 @@ export default function TargetAudienceStep({
         value={ageGroups}
         onChange={setAgeGroups}
         error={errors.ageGroups}
+        fieldRef={register("ageGroups")}
       />
 
       <ChipGroupField
@@ -91,14 +134,17 @@ export default function TargetAudienceStep({
         value={gender}
         onChange={setGender}
         error={errors.gender}
+        fieldRef={register("gender")}
       />
 
       <TagsField
         label="Location"
         value={locations}
         onChange={setLocations}
-        placeholder="Type a location and press Enter"
+        onBlur={() => validateField("locations")}
+        placeholder="e.g., Kochi, Kerala — press Enter to add"
         error={errors.locations}
+        fieldRef={register("locations")}
       />
 
       <ChipGroupField
@@ -109,14 +155,17 @@ export default function TargetAudienceStep({
         value={customerType}
         onChange={setCustomerType}
         error={errors.customerType}
+        fieldRef={register("customerType")}
       />
 
       <TagsField
         label="Interests"
         value={interests}
         onChange={setInterests}
-        placeholder="Type an interest and press Enter"
+        onBlur={() => validateField("interests")}
+        placeholder="e.g., Fitness, Home décor — press Enter to add"
         error={errors.interests}
+        fieldRef={register("interests")}
       />
 
       <TextAreaField
@@ -124,7 +173,10 @@ export default function TargetAudienceStep({
         description="Describe your typical customer today, if you already have one."
         value={existingCustomerProfile}
         onChange={setExistingCustomerProfile}
+        onBlur={() => validateField("existingCustomerProfile")}
         error={errors.existingCustomerProfile}
+        fieldRef={register("existingCustomerProfile")}
+        placeholder="e.g., Working professionals aged 25–40 in Tier 1 cities"
       />
 
       {saveMessage && (
@@ -132,6 +184,8 @@ export default function TargetAudienceStep({
           {saveMessage}
         </p>
       )}
+
+      <ValidationSummary key={attempt} items={summaryItems} onSelect={(key) => focusFirst([key])} />
 
       <div className="flex flex-col gap-2 sm:flex-row sm:justify-between">
         <button

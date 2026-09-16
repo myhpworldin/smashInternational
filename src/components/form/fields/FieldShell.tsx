@@ -5,6 +5,9 @@ type FieldShellProps = {
   description?: string;
   required?: boolean;
   error?: string;
+  // Registers this field's outer container against a step's field registry
+  // (see useFieldRegistry) so a failed Continue/Submit can scroll/focus it.
+  fieldRef?: (el: HTMLDivElement | null) => void;
   children: (controlId: string, describedBy: string | undefined) => ReactNode;
 };
 
@@ -16,6 +19,7 @@ export default function FieldShell({
   description,
   required,
   error,
+  fieldRef,
   children,
 }: FieldShellProps) {
   const controlId = useId();
@@ -24,7 +28,7 @@ export default function FieldShell({
   const describedBy = [descriptionId, errorId].filter(Boolean).join(" ") || undefined;
 
   return (
-    <div className="flex flex-col gap-1.5">
+    <div ref={fieldRef} className="flex flex-col gap-1.5">
       <label htmlFor={controlId} className="font-body text-sm text-bone">
         {label}
         {required && (

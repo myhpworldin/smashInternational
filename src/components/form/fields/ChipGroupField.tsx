@@ -11,6 +11,7 @@ type ChipGroupFieldProps = {
   value: string[];
   onChange: (value: string[]) => void;
   multiple?: boolean;
+  fieldRef?: (el: HTMLDivElement | null) => void;
 };
 
 // Toggleable chip group — used for anything that's really a fixed set of
@@ -26,6 +27,7 @@ export default function ChipGroupField({
   value,
   onChange,
   multiple = true,
+  fieldRef,
 }: ChipGroupFieldProps) {
   const toggle = (optionValue: string) => {
     if (multiple) {
@@ -40,7 +42,7 @@ export default function ChipGroupField({
   };
 
   return (
-    <FieldShell label={label} description={description} required={required} error={error}>
+    <FieldShell label={label} description={description} required={required} error={error} fieldRef={fieldRef}>
       {(controlId, describedBy) => (
         <div id={controlId} aria-describedby={describedBy} className="flex flex-wrap gap-2">
           {options.map((option) => {

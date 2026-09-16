@@ -8,7 +8,9 @@ type TextFieldProps = {
   type?: "text" | "email" | "url" | "tel" | "number";
   value: string;
   onChange: (value: string) => void;
+  onBlur?: () => void;
   placeholder?: string;
+  fieldRef?: (el: HTMLDivElement | null) => void;
 };
 
 const INPUT_CLASSNAME =
@@ -22,16 +24,19 @@ export default function TextField({
   type = "text",
   value,
   onChange,
+  onBlur,
   placeholder,
+  fieldRef,
 }: TextFieldProps) {
   return (
-    <FieldShell label={label} description={description} required={required} error={error}>
+    <FieldShell label={label} description={description} required={required} error={error} fieldRef={fieldRef}>
       {(controlId, describedBy) => (
         <input
           id={controlId}
           type={type}
           value={value}
           onChange={(e) => onChange(e.target.value)}
+          onBlur={onBlur}
           placeholder={placeholder}
           aria-describedby={describedBy}
           aria-invalid={Boolean(error)}

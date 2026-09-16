@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { SERVICE_CATEGORIES, SERVICES } from "@/shared/config/services";
+import { useFieldRegistry } from "@/lib/form/useFieldRegistry";
+import ValidationSummary from "@/components/form/ValidationSummary";
 
 type ServiceSelectionStepProps = {
   initialValue: string[];
@@ -18,6 +20,8 @@ export default function ServiceSelectionStep({
 }: ServiceSelectionStepProps) {
   const [selected, setSelected] = useState<string[]>(initialValue);
   const [touched, setTouched] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  const { register, focusFirst } = useFieldRegistry();
 
   const toggle = (id: string) => {
     setSelected((prev) => (prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]));
@@ -25,11 +29,17 @@ export default function ServiceSelectionStep({
 
   const handleContinue = () => {
     setTouched(true);
-    if (selected.length === 0 || saving) return;
+    if (selected.length === 0) {
+      setAttempt((a) => a + 1);
+      focusFirst(["services"]);
+      return;
+    }
+    if (saving) return;
     void onNext(selected);
   };
 
   const showEmptyError = touched && selected.length === 0;
+  const summaryItems = showEmptyError ? [{ key: "services", label: "Select a service" }] : [];
 
   return (
     <div className="flex flex-col gap-6">
@@ -42,7 +52,7 @@ export default function ServiceSelectionStep({
         </p>
       </div>
 
-      <div className="flex flex-col gap-6">
+      <div ref={register("services")} className="flex flex-col gap-6">
         {SERVICE_CATEGORIES.map((category) => (
           <div key={category.id} className="flex flex-col gap-2">
             <h2 className="font-body text-xs tracking-[0.14em] text-ash uppercase">
@@ -93,6 +103,7 @@ export default function ServiceSelectionStep({
             {saveMessage}
           </p>
         )}
+        <ValidationSummary key={attempt} items={summaryItems} onSelect={(key) => focusFirst([key])} />
         <button
           type="button"
           onClick={handleContinue}

@@ -3,8 +3,10 @@
 import { useState } from "react";
 import TextField from "@/components/form/fields/TextField";
 import { getApplicableBudgetChannels } from "@/shared/config/services";
-import { budgetSchema, type BudgetInput } from "@/shared/validation/onboarding";
+import { budgetAllocationSchema, budgetSchema, type BudgetInput } from "@/shared/validation/onboarding";
 import { formatINR } from "@/lib/format/currency";
+import { useFieldRegistry } from "@/lib/form/useFieldRegistry";
+import ValidationSummary from "@/components/form/ValidationSummary";
 
 type BudgetStepProps = {
   selectedServiceIds: string[];
@@ -37,26 +39,95 @@ export default function BudgetStep({
     }
     return result;
   });
-  const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [rootError, setRootError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const { register, focusFirst } = useFieldRegistry();
 
   const totalNum = Number(monthlyTotal) || 0;
   const allocatedNum = channels.reduce((sum, c) => sum + (Number(amounts[c.value]) || 0), 0);
   const remainingNum = totalNum - allocatedNum;
 
-  const handleContinue = () => {
+  const FIELD_ORDER = ["monthlyTotal", ...channels.map((c) => `allocation.${c.value}`)];
+  const FIELD_LABELS: Record<string, string> = {
+    monthlyTotal: "Monthly marketing budget",
+    ...Object.fromEntries(channels.map((c) => [`allocation.${c.value}`, c.label])),
+  };
+
+  // Validates the whole budget (bounds + the allocated-vs-total refine) and
+  // also checks each channel's amount individually against the same
+  // per-allocation schema, since budgetSchema's `allocations` array only
+  // includes channels with a non-zero amount — an out-of-range value in a
+  // channel the user hasn't typed into yet should never block them.
+  const validateAll = () => {
     const allocations = channels
       .map((c) => ({ channel: c.value, amount: Number(amounts[c.value]) || 0 }))
       .filter((a) => a.amount > 0);
 
     const parsed = budgetSchema.safeParse({ monthlyTotal: totalNum, allocations });
+
+    const nextFieldErrors: Record<string, string> = {};
+    let nextRootError: string | null = null;
+
     if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? "Check the budget details and try again.");
+      for (const issue of parsed.error.issues) {
+        if (issue.path.length === 0) {
+          nextRootError = issue.message;
+        } else if (issue.path[0] === "monthlyTotal") {
+          nextFieldErrors.monthlyTotal = issue.message;
+        }
+      }
+    }
+
+    for (const channel of channels) {
+      const amount = Number(amounts[channel.value]) || 0;
+      if (amount <= 0) continue;
+      const result = budgetAllocationSchema.safeParse({ channel: channel.value, amount });
+      if (!result.success) {
+        const amountIssue = result.error.issues.find((i) => i.path[0] === "amount");
+        if (amountIssue) nextFieldErrors[`allocation.${channel.value}`] = amountIssue.message;
+      }
+    }
+
+    return {
+      ok: parsed.success && Object.keys(nextFieldErrors).length === 0,
+      data: parsed.success ? parsed.data : null,
+      fieldErrors: nextFieldErrors,
+      rootError: nextRootError,
+    };
+  };
+
+  const validateField = (key: string) => {
+    const result = validateAll();
+    setFieldErrors((prev) => {
+      const next = { ...prev };
+      if (result.fieldErrors[key]) next[key] = result.fieldErrors[key];
+      else delete next[key];
+      return next;
+    });
+  };
+
+  const handleContinue = () => {
+    const result = validateAll();
+    setFieldErrors(result.fieldErrors);
+    setRootError(result.rootError);
+
+    if (!result.ok || !result.data) {
+      setAttempt((a) => a + 1);
+      const invalidKeys = FIELD_ORDER.filter((key) => result.fieldErrors[key]);
+      focusFirst(invalidKeys.length > 0 ? invalidKeys : ["monthlyTotal"]);
       return;
     }
-    setError(null);
     if (saving) return;
-    void onNext(parsed.data);
+    void onNext(result.data);
   };
+
+  const summaryItems =
+    FIELD_ORDER.filter((key) => fieldErrors[key]).length > 0
+      ? FIELD_ORDER.filter((key) => fieldErrors[key]).map((key) => ({ key, label: FIELD_LABELS[key] }))
+      : rootError
+        ? [{ key: "monthlyTotal", label: "Budget allocation" }]
+        : [];
 
   return (
     <div className="flex flex-col gap-6">
@@ -73,6 +144,10 @@ export default function BudgetStep({
         type="number"
         value={monthlyTotal}
         onChange={setMonthlyTotal}
+        onBlur={() => validateField("monthlyTotal")}
+        error={fieldErrors.monthlyTotal}
+        fieldRef={register("monthlyTotal")}
+        placeholder="e.g., ₹1,00,000"
       />
 
       <div className="flex flex-col gap-3">
@@ -84,6 +159,10 @@ export default function BudgetStep({
             type="number"
             value={amounts[channel.value] ?? ""}
             onChange={(v) => setAmounts((prev) => ({ ...prev, [channel.value]: v }))}
+            onBlur={() => validateField(`allocation.${channel.value}`)}
+            error={fieldErrors[`allocation.${channel.value}`]}
+            fieldRef={register(`allocation.${channel.value}`)}
+            placeholder="e.g., ₹40,000"
           />
         ))}
       </div>
@@ -103,16 +182,18 @@ export default function BudgetStep({
         </div>
       </div>
 
-      {error && (
-        <p role="alert" className="font-body text-xs text-smash-text">
-          {error}
-        </p>
-      )}
       {saveMessage && (
         <p role="alert" className="font-body text-xs text-smash-text">
           {saveMessage}
         </p>
       )}
+
+      <ValidationSummary
+        key={attempt}
+        items={summaryItems}
+        onSelect={(key) => focusFirst([key])}
+        title={rootError ?? undefined}
+      />
 
       <div className="flex flex-col gap-2 sm:flex-row sm:justify-between">
         <button
