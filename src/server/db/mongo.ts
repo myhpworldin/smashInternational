@@ -26,6 +26,21 @@ export function getMongoClient(): Promise<MongoClient> {
       // enough that a user gets a "try again" response instead of a
       // long silent wait.
       serverSelectionTimeoutMS: 8000,
+      // serverSelectionTimeoutMS only bounds finding a server for a *new*
+      // operation — it does nothing once a socket is already checked out
+      // and a request is in flight on it. On Vercel, a warm lambda can sit
+      // idle for minutes between invocations; the pooled socket looks fine
+      // to the driver but the surrounding network (NAT/firewall/Atlas) has
+      // often silently dropped it by then. The next query sent on that
+      // stale socket gets no reply and, without this, the driver waits
+      // forever — the request hangs until the platform itself kills the
+      // function, which is what showed up live as the browser giving up
+      // with net::ERR_TIMED_OUT. Bounding the socket read/write closes
+      // that gap.
+      socketTimeoutMS: 10000,
+      // Proactively recycle idle pooled connections before they get old
+      // enough to hit that silent-drop window in the first place.
+      maxIdleTimeMS: 60000,
     }).connect();
     globalForMongo._mongoClientPromise = clientPromise;
 
