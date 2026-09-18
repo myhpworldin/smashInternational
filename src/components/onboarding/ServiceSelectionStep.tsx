@@ -4,24 +4,40 @@ import { useState } from "react";
 import { SERVICE_CATEGORIES, SERVICES } from "@/shared/config/services";
 import { useFieldRegistry } from "@/lib/form/useFieldRegistry";
 import ValidationSummary from "@/components/form/ValidationSummary";
+import SaveStatusIndicator from "@/components/form/SaveStatusIndicator";
+import type { SaveStatus } from "@/store/useOnboardingDraftStore";
+import { readSectionCacheIfNewer } from "@/lib/onboarding/draftCache";
+import { useDraftCacheSync } from "@/lib/onboarding/useDraftCacheSync";
+import { useOpportunisticAutosave } from "@/lib/onboarding/useOpportunisticAutosave";
 
 type ServiceSelectionStepProps = {
   initialValue: string[];
   onNext: (value: string[]) => Promise<void>;
   saving: boolean;
+  saveStatus: SaveStatus;
   saveMessage: string | null;
+  onboardingId: string;
+  serverUpdatedAt: string;
 };
 
 export default function ServiceSelectionStep({
   initialValue,
   onNext,
   saving,
+  saveStatus,
   saveMessage,
+  onboardingId,
+  serverUpdatedAt,
 }: ServiceSelectionStepProps) {
-  const [selected, setSelected] = useState<string[]>(initialValue);
+  const [selected, setSelected] = useState<string[]>(
+    () => readSectionCacheIfNewer<string[]>(onboardingId, "selectedServiceIds", serverUpdatedAt) ?? initialValue,
+  );
   const [touched, setTouched] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const { register, focusFirst } = useFieldRegistry();
+
+  useDraftCacheSync(onboardingId, "selectedServiceIds", selected);
+  useOpportunisticAutosave(onboardingId, selected.length > 0 ? { selectedServiceIds: selected } : null);
 
   const toggle = (id: string) => {
     setSelected((prev) => (prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]));
@@ -98,10 +114,12 @@ export default function ServiceSelectionStep({
             Select at least one service to continue.
           </p>
         )}
-        {saveMessage && (
+        {saveMessage ? (
           <p role="alert" className="font-body text-xs text-smash-text">
             {saveMessage}
           </p>
+        ) : (
+          <SaveStatusIndicator status={saveStatus} />
         )}
         <ValidationSummary key={attempt} items={summaryItems} onSelect={(key) => focusFirst([key])} />
         <button

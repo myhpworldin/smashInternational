@@ -8,6 +8,11 @@ import { BUSINESS_OBJECTIVES } from "@/shared/types/onboarding";
 import { issuesToFieldErrors } from "@/lib/form/zodErrors";
 import { useFieldRegistry } from "@/lib/form/useFieldRegistry";
 import ValidationSummary from "@/components/form/ValidationSummary";
+import SaveStatusIndicator from "@/components/form/SaveStatusIndicator";
+import type { SaveStatus } from "@/store/useOnboardingDraftStore";
+import { readSectionCacheIfNewer } from "@/lib/onboarding/draftCache";
+import { useDraftCacheSync } from "@/lib/onboarding/useDraftCacheSync";
+import { useOpportunisticAutosave } from "@/lib/onboarding/useOpportunisticAutosave";
 
 const FIELD_ORDER = ["selected", "otherDetail"] as const;
 const FIELD_LABELS: Record<(typeof FIELD_ORDER)[number], string> = {
@@ -15,28 +20,50 @@ const FIELD_LABELS: Record<(typeof FIELD_ORDER)[number], string> = {
   otherDetail: "Tell us more",
 };
 
+type ObjectivesFormState = { selected: string[]; otherDetail: string };
+
 type BusinessObjectivesStepProps = {
   initialValue: Partial<ObjectivesInput> | null;
   onNext: (value: ObjectivesInput) => Promise<void>;
   onBack: () => void;
   saving: boolean;
+  saveStatus: SaveStatus;
   saveMessage: string | null;
+  onboardingId: string;
+  serverUpdatedAt: string;
 };
 
 const OPTIONS = BUSINESS_OBJECTIVES.map((o) => ({ value: o.id, label: o.label }));
+
+const cachedOrInitial = (
+  onboardingId: string,
+  serverUpdatedAt: string,
+  initialValue: Partial<ObjectivesInput> | null,
+): ObjectivesFormState => {
+  const cached = readSectionCacheIfNewer<ObjectivesFormState>(onboardingId, "objectives", serverUpdatedAt);
+  return cached ?? { selected: initialValue?.selected ?? [], otherDetail: initialValue?.otherDetail ?? "" };
+};
 
 export default function BusinessObjectivesStep({
   initialValue,
   onNext,
   onBack,
   saving,
+  saveStatus,
   saveMessage,
+  onboardingId,
+  serverUpdatedAt,
 }: BusinessObjectivesStepProps) {
-  const [selected, setSelected] = useState<string[]>(initialValue?.selected ?? []);
-  const [otherDetail, setOtherDetail] = useState(initialValue?.otherDetail ?? "");
+  const [initial] = useState(() => cachedOrInitial(onboardingId, serverUpdatedAt, initialValue));
+  const [selected, setSelected] = useState<string[]>(initial.selected);
+  const [otherDetail, setOtherDetail] = useState(initial.otherDetail);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [attempt, setAttempt] = useState(0);
   const { register, focusFirst } = useFieldRegistry();
+
+  useDraftCacheSync(onboardingId, "objectives", { selected, otherDetail });
+  const validForAutosave = objectivesSchema.safeParse({ selected, otherDetail });
+  useOpportunisticAutosave(onboardingId, validForAutosave.success ? { objectives: validForAutosave.data } : null);
 
   const validateField = (key: (typeof FIELD_ORDER)[number]) => {
     const parsed = objectivesSchema.safeParse({ selected, otherDetail });
@@ -101,10 +128,12 @@ export default function BusinessObjectivesStep({
         />
       )}
 
-      {saveMessage && (
+      {saveMessage ? (
         <p role="alert" className="font-body text-xs text-smash-text">
           {saveMessage}
         </p>
+      ) : (
+        <SaveStatusIndicator status={saveStatus} />
       )}
 
       <ValidationSummary key={attempt} items={summaryItems} onSelect={(key) => focusFirst([key])} />

@@ -7,6 +7,11 @@ import { budgetAllocationSchema, budgetSchema, type BudgetInput } from "@/shared
 import { formatINR } from "@/lib/format/currency";
 import { useFieldRegistry } from "@/lib/form/useFieldRegistry";
 import ValidationSummary from "@/components/form/ValidationSummary";
+import SaveStatusIndicator from "@/components/form/SaveStatusIndicator";
+import type { SaveStatus } from "@/store/useOnboardingDraftStore";
+import { readSectionCacheIfNewer } from "@/lib/onboarding/draftCache";
+import { useDraftCacheSync } from "@/lib/onboarding/useDraftCacheSync";
+import { useOpportunisticAutosave } from "@/lib/onboarding/useOpportunisticAutosave";
 
 type BudgetStepProps = {
   selectedServiceIds: string[];
@@ -14,8 +19,13 @@ type BudgetStepProps = {
   onNext: (value: BudgetInput) => Promise<void>;
   onBack: () => void;
   saving: boolean;
+  saveStatus: SaveStatus;
   saveMessage: string | null;
+  onboardingId: string;
+  serverUpdatedAt: string;
 };
+
+type BudgetFormState = { monthlyTotal: string; amounts: Record<string, string> };
 
 export default function BudgetStep({
   selectedServiceIds,
@@ -23,22 +33,29 @@ export default function BudgetStep({
   onNext,
   onBack,
   saving,
+  saveStatus,
   saveMessage,
+  onboardingId,
+  serverUpdatedAt,
 }: BudgetStepProps) {
   const channels = getApplicableBudgetChannels(selectedServiceIds);
 
-  const [monthlyTotal, setMonthlyTotal] = useState(
-    initialValue?.monthlyTotal !== undefined ? String(initialValue.monthlyTotal) : "",
-  );
-  const [amounts, setAmounts] = useState<Record<string, string>>(() => {
+  const [initial] = useState<BudgetFormState>(() => {
+    const cached = readSectionCacheIfNewer<BudgetFormState>(onboardingId, "budget", serverUpdatedAt);
+    if (cached) return cached;
     const existing = new Map((initialValue?.allocations ?? []).map((a) => [a.channel, a.amount]));
-    const result: Record<string, string> = {};
+    const amounts: Record<string, string> = {};
     for (const channel of channels) {
       const value = existing.get(channel.value);
-      result[channel.value] = value !== undefined ? String(value) : "";
+      amounts[channel.value] = value !== undefined ? String(value) : "";
     }
-    return result;
+    return {
+      monthlyTotal: initialValue?.monthlyTotal !== undefined ? String(initialValue.monthlyTotal) : "",
+      amounts,
+    };
   });
+  const [monthlyTotal, setMonthlyTotal] = useState(initial.monthlyTotal);
+  const [amounts, setAmounts] = useState<Record<string, string>>(initial.amounts);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [rootError, setRootError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -129,10 +146,17 @@ export default function BudgetStep({
         ? [{ key: "monthlyTotal", label: "Budget allocation" }]
         : [];
 
+  useDraftCacheSync(onboardingId, "budget", { monthlyTotal, amounts });
+  const validForAutosave = validateAll();
+  useOpportunisticAutosave(
+    onboardingId,
+    validForAutosave.ok && validForAutosave.data ? { budget: validForAutosave.data } : null,
+  );
+
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="font-display text-xl text-bone md:text-2xl">Monthly marketing budget</h1>
+        <h1 className="font-display text-xl text-bone md:text-2xl">Monthly marketing budget expectation</h1>
         <p className="mt-1 font-body text-sm text-ash">
           Only shown because you selected an advertising service.
         </p>
@@ -182,10 +206,12 @@ export default function BudgetStep({
         </div>
       </div>
 
-      {saveMessage && (
+      {saveMessage ? (
         <p role="alert" className="font-body text-xs text-smash-text">
           {saveMessage}
         </p>
+      ) : (
+        <SaveStatusIndicator status={saveStatus} />
       )}
 
       <ValidationSummary

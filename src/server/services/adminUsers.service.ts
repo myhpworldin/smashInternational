@@ -1,10 +1,12 @@
 import "server-only";
 import { ObjectId } from "mongodb";
+import { getMongoClient } from "@/server/db/mongo";
 import * as usersRepo from "@/server/repositories/users.repo";
 import type { UserDoc } from "@/server/repositories/users.repo";
 import * as auditLog from "@/server/repositories/auditLog.repo";
 import { hashPassword } from "@/server/auth/password";
 import { generateTempPassword } from "@/server/auth/tempPassword";
+import { cascadeAvailabilityChange, recordAvailabilityCascadeAudit } from "@/server/services/staffAvailability.service";
 import type { Role } from "@/shared/types/user";
 import type { AdminUserRow, AdminUserStatus } from "@/shared/types/adminUser";
 
@@ -56,15 +58,15 @@ export async function createUserByAdmin(
   input: CreateUserByAdminInput,
   actor: UserDoc,
 ): Promise<CreateUserByAdminResult> {
-  const existing = await usersRepo.findByEmail(input.email);
-  if (existing) {
-    return { ok: false, errors: ["A user with this email already exists."] };
-  }
-
-  const temporaryPassword = generateTempPassword();
-  const passwordHash = await hashPassword(temporaryPassword);
-
   try {
+    const existing = await usersRepo.findByEmail(input.email);
+    if (existing) {
+      return { ok: false, errors: ["A user with this email already exists."] };
+    }
+
+    const temporaryPassword = generateTempPassword();
+    const passwordHash = await hashPassword(temporaryPassword);
+
     const user = await usersRepo.createByAdmin({
       name: input.name,
       email: input.email,
@@ -105,7 +107,12 @@ export async function createUserByAdmin(
     if (isDuplicateKeyError(err)) {
       return { ok: false, errors: ["A user with this email already exists."] };
     }
-    throw err;
+    // A transient DB error (stale pooled connection, brief server-selection
+    // delay) must still resolve to a typed result — rethrowing here would
+    // leave the API route with an unhandled rejection and no JSON body,
+    // which the client can only see as the Create button silently hanging.
+    console.error("createUserByAdmin failed:", err);
+    return { ok: false, errors: ["Couldn't create this user right now. Try again."] };
   }
 }
 
@@ -117,6 +124,7 @@ function toAdminUserRow(doc: UserDoc): AdminUserRow {
     phone: doc.phone ?? null,
     role: doc.role,
     status: doc.status ?? "active",
+    availability: doc.role === "staff" ? doc.availability ?? "available" : undefined,
     emailVerified: doc.emailVerified ?? false,
     mustChangePassword: doc.mustChangePassword ?? false,
     createdAt: doc.createdAt,
@@ -130,6 +138,22 @@ function toAdminUserRow(doc: UserDoc): AdminUserRow {
 export async function listUsersForAdmin(): Promise<AdminUserRow[]> {
   const docs = await usersRepo.listAll();
   return docs.map(toAdminUserRow);
+}
+
+export async function getAdminUserById(id: string): Promise<AdminUserRow | null> {
+  const doc = await usersRepo.findById(id);
+  return doc ? toAdminUserRow(doc) : null;
+}
+
+export type AssignableStaffOption = { id: string; name: string; email: string };
+
+// Staff currently eligible to receive a *new* assignment — feeds the
+// "Assign staff" control on Onboarding Detail (see
+// serviceAssignments.service.ts's createAssignment for the same
+// eligibility rule enforced server-side, not just reflected here).
+export async function listAssignableStaffForAdmin(): Promise<AssignableStaffOption[]> {
+  const docs = await usersRepo.listAssignableStaff();
+  return docs.map((doc) => ({ id: doc._id.toHexString(), name: doc.name ?? doc.email, email: doc.email }));
 }
 
 export type MutationResult = { ok: true } | { ok: false; errors: string[] };
@@ -198,7 +222,37 @@ export async function updateUserRole(
     }
   }
 
-  await usersRepo.updateRole(target._id, role);
+  // A staff member moved to a different role can no longer hold active
+  // work (getAuthorizedStaff/requireRole("staff") both gate on the live
+  // role, so they'd lose API/dashboard access to it immediately) — but
+  // until Phase 6 QA, nothing told the *assignment* that had happened.
+  // Found during Phase 6 QA (§21): the assignment stayed "active" with a
+  // staffUserId pointing at a now-non-staff account — invisible to the
+  // ex-staff member (access correctly denied) and invisible to the
+  // handover dashboard (which only ever looks at role:"staff" users),
+  // i.e. silently orphaned with no one able to see or recover it. Cascade
+  // the same way blocking a staff member does (setUserStatus below),
+  // atomically with the role write, so the work surfaces as
+  // handover_required instead of disappearing.
+  const shouldCascadeAwayFromStaff =
+    target.role === "staff" && role !== "staff" && (target.availability ?? "available") === "available";
+  let affectedAssignmentIds: ObjectId[] = [];
+
+  if (shouldCascadeAwayFromStaff) {
+    const client = await getMongoClient();
+    const session = client.startSession();
+    try {
+      await session.withTransaction(async () => {
+        await usersRepo.updateRole(target._id, role, session);
+        affectedAssignmentIds = await cascadeAvailabilityChange(target, actor, "unavailable", null, session);
+      });
+    } finally {
+      await session.endSession();
+    }
+  } else {
+    await usersRepo.updateRole(target._id, role);
+  }
+
   await auditLog.record({
     action: "role_changed",
     actorUserId: actor._id,
@@ -210,6 +264,10 @@ export async function updateUserRole(
     targetRole: role,
     metadata: { fromRole: target.role, toRole: role },
   });
+
+  if (shouldCascadeAwayFromStaff) {
+    await recordAvailabilityCascadeAudit(target, actor, "available", "unavailable", null, affectedAssignmentIds);
+  }
 
   return { ok: true };
 }
@@ -243,9 +301,39 @@ export async function setUserStatus(
     }
   }
 
+  // Blocking a staff member must never leave their active assignments
+  // silently ownerless (Phase 1 audit §8 / Phase 2 primary requirement) —
+  // caught during testing: without this, an assignment stayed "active"
+  // with no staff able to touch it. Cascades the same way an explicit
+  // availability change does (staffAvailability.service.ts), in the same
+  // transaction as the status write, and only when they were actually
+  // "available" (a staff member already on_leave/unavailable/departed has
+  // already had their assignments dealt with — this must never re-trigger
+  // or clobber an in-progress Phase 3 handover). Unblocking deliberately
+  // does the reverse of nothing: account status and work availability are
+  // separate axes (Phase 1 §3) — restoring assignments after unblock is a
+  // distinct admin decision made through the availability action, not an
+  // automatic side effect of unblocking.
+  const shouldCascadeToUnavailable =
+    status === "blocked" && target.role === "staff" && (target.availability ?? "available") === "available";
+  let affectedAssignmentIds: ObjectId[] = [];
+
   if (status === "blocked") {
     const nextSessionVersion = (target.sessionVersion ?? 1) + 1;
-    await usersRepo.setStatus(target._id, status, nextSessionVersion);
+    if (shouldCascadeToUnavailable) {
+      const client = await getMongoClient();
+      const session = client.startSession();
+      try {
+        await session.withTransaction(async () => {
+          await usersRepo.setStatus(target._id, status, nextSessionVersion, session);
+          affectedAssignmentIds = await cascadeAvailabilityChange(target, actor, "unavailable", null, session);
+        });
+      } finally {
+        await session.endSession();
+      }
+    } else {
+      await usersRepo.setStatus(target._id, status, nextSessionVersion);
+    }
   } else {
     await usersRepo.setStatus(target._id, status);
   }
@@ -261,6 +349,10 @@ export async function setUserStatus(
     targetRole: target.role,
     metadata: { fromStatus: currentStatus, toStatus: status },
   });
+
+  if (shouldCascadeToUnavailable) {
+    await recordAvailabilityCascadeAudit(target, actor, "available", "unavailable", null, affectedAssignmentIds);
+  }
 
   return { ok: true };
 }

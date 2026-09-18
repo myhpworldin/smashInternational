@@ -1,7 +1,7 @@
 import "server-only";
 import { ObjectId } from "mongodb";
 import { getMongoClient } from "@/server/db/mongo";
-import type { Role } from "@/shared/types/user";
+import type { Role, StaffAvailability } from "@/shared/types/user";
 import type { AdminUserStatus } from "@/shared/types/adminUser";
 
 const COLLECTION = "users";
@@ -40,6 +40,13 @@ export type UserDoc = {
   // session must be forced to re-authenticate (block, admin password
   // reset); never decremented.
   sessionVersion?: number;
+  // Additive for Staff Continuity Phase 2 — only ever set on role:"staff"
+  // docs, undefined everywhere else (including staff docs predating this
+  // field, which every read treats as "available" — see
+  // staffAvailability.service.ts). Deliberately separate from `status`:
+  // that gates authentication, this gates whether the person can keep
+  // owning active service assignments.
+  availability?: StaffAvailability;
 };
 
 async function collection() {
@@ -109,6 +116,7 @@ export async function createByAdmin(input: {
     createdBy: input.createdBy,
     updatedAt: now,
     sessionVersion: 1,
+    availability: input.role === "staff" ? "available" : undefined,
   };
   await (await collection()).insertOne(doc);
   return doc;
@@ -160,20 +168,29 @@ export async function updateProfile(
   await (await collection()).updateOne({ _id: id }, { $set: { ...updates, updatedAt: new Date() } });
 }
 
-export async function updateRole(id: ObjectId, role: Role): Promise<void> {
-  await (await collection()).updateOne({ _id: id }, { $set: { role, updatedAt: new Date() } });
+export async function updateRole(
+  id: ObjectId,
+  role: Role,
+  session?: import("mongodb").ClientSession,
+): Promise<void> {
+  await (await collection()).updateOne({ _id: id }, { $set: { role, updatedAt: new Date() } }, { session });
 }
 
 // `sessionVersion` is only passed when the caller wants existing sessions
 // forced to re-authenticate (blocking) — omitted for unblocking, which
 // only needs to flip status back.
-export async function setStatus(id: ObjectId, status: AdminUserStatus, sessionVersion?: number): Promise<void> {
+export async function setStatus(
+  id: ObjectId,
+  status: AdminUserStatus,
+  sessionVersion?: number,
+  session?: import("mongodb").ClientSession,
+): Promise<void> {
   const setFields: { status: AdminUserStatus; updatedAt: Date; sessionVersion?: number } = {
     status,
     updatedAt: new Date(),
   };
   if (sessionVersion !== undefined) setFields.sessionVersion = sessionVersion;
-  await (await collection()).updateOne({ _id: id }, { $set: setFields });
+  await (await collection()).updateOne({ _id: id }, { $set: setFields }, { session });
 }
 
 // Always bumps sessionVersion in the same write — an admin-issued
@@ -240,4 +257,77 @@ export async function setClientId(userId: ObjectId, clientId: ObjectId): Promise
 // onboarding data onto whoever logs in next.
 export async function findByOnboardingClientId(clientId: ObjectId): Promise<UserDoc | null> {
   return (await collection()).findOne({ clientId });
+}
+
+// `session` threads a Mongo client session through when the caller is
+// running this inside a transaction (see staffAvailability.service.ts,
+// which must never leave availability changed without also resolving the
+// affected assignments — see MongoClient docs on ClientSession).
+export async function setAvailability(
+  id: ObjectId,
+  availability: StaffAvailability,
+  session?: import("mongodb").ClientSession,
+): Promise<void> {
+  await (await collection()).updateOne(
+    { _id: id },
+    { $set: { availability, updatedAt: new Date() } },
+    { session },
+  );
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// Name/email lookup for the handover history search (Phase 5 §15) — same
+// "resolve to ids, filter another collection" approach as
+// onboarding.repo.ts's searchIdsByCompanyName.
+export async function searchStaffIds(q: string): Promise<ObjectId[]> {
+  const trimmed = q.trim();
+  if (!trimmed) return [];
+  const regex = new RegExp(escapeRegex(trimmed), "i");
+  const docs = await (await collection())
+    .find({ role: "staff", $or: [{ name: regex }, { email: regex }] }, { projection: { _id: 1 } })
+    .toArray();
+  return docs.map((d) => d._id);
+}
+
+// Staff whose availability currently blocks them from continuing active
+// work (Phase 5 §4/§17) — the population the handover dashboard reviews.
+// Mirrors the "blocksContinuedWork" rule in staffAvailability.service.ts:
+// anything other than "available".
+export async function listUnavailableStaff(): Promise<UserDoc[]> {
+  return (await collection())
+    .find({ role: "staff", availability: { $in: ["on_leave", "unavailable", "departed"] } })
+    .sort({ name: 1 })
+    .toArray();
+}
+
+// Staff eligible to *receive a new assignment* right now (the "assign
+// staff" dropdown on Onboarding Detail) — same eligibility rule as
+// countEligibleStaff, just returning the rows instead of a count.
+export async function listAssignableStaff(): Promise<UserDoc[]> {
+  return (await collection())
+    .find({
+      role: "staff",
+      status: { $ne: "blocked" },
+      $or: [{ availability: "available" }, { availability: { $exists: false } }],
+    })
+    .sort({ name: 1 })
+    .toArray();
+}
+
+// Eligibility for receiving a handed-over assignment (Phase 1 audit §14):
+// an active, non-blocked staff account currently marked available. There
+// is no service-specific capability field yet (a documented gap — see
+// the Phase 1 report) so this is the full eligibility check for now,
+// deliberately excluding one staff id (the departing owner can never be
+// their own replacement).
+export async function countEligibleStaff(excludeStaffUserId: ObjectId): Promise<number> {
+  return (await collection()).countDocuments({
+    role: "staff",
+    _id: { $ne: excludeStaffUserId },
+    status: { $ne: "blocked" },
+    $or: [{ availability: "available" }, { availability: { $exists: false } }],
+  });
 }

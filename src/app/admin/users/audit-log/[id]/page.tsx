@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireRole } from "@/server/auth/dal";
 import { getAuditLogForAdmin } from "@/server/services/auditLog.service";
 import { AUDIT_ACTION_LABEL } from "@/shared/types/auditLog";
+import { ADMIN_USER_ROLE_LABEL } from "@/shared/types/adminUser";
 import { formatDateTime } from "@/lib/format/date";
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
@@ -66,7 +67,7 @@ export default async function AuditLogDetailPage({ params }: { params: Promise<{
         <Field label="Admin" value={`${record.actorName} (${record.actorEmail})`} />
         <Field label="Action" value={AUDIT_ACTION_LABEL[record.action]} />
         <Field label="Target" value={`${record.targetName} (${record.targetEmail})`} />
-        <Field label="Target role" value={record.targetRole === "admin" ? "Admin" : "Client"} />
+        <Field label="Target role" value={ADMIN_USER_ROLE_LABEL[record.targetRole]} />
         <Field label="Date" value={formatDateTime(record.createdAt)} />
       </div>
 

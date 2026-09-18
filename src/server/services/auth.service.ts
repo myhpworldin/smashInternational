@@ -22,9 +22,10 @@ import {
 } from "@/server/auth/otp";
 import { sendEmail } from "@/lib/email/sendEmail";
 import { loginOtpEmail } from "@/lib/email/templates";
+import type { Role } from "@/shared/types/user";
 
 export type LoginResult =
-  | { ok: true; role: "admin" | "client"; mustChangePassword: boolean }
+  | { ok: true; role: Role; mustChangePassword: boolean }
   | { ok: false; reason?: "unverified" | "blocked" };
 
 export async function login(email: string, password: string): Promise<LoginResult> {
@@ -65,7 +66,7 @@ export async function logout(): Promise<void> {
 
 export type LoginOtpResult = { ok: true } | { ok: false; errors: string[] };
 export type LoginOtpVerifyResult =
-  | { ok: true; role: "admin" | "client"; mustChangePassword: boolean }
+  | { ok: true; role: Role; mustChangePassword: boolean }
   | { ok: false; errors: string[] };
 
 // Enumeration-safe, same reasoning as signup's OTP flow (see
@@ -128,7 +129,7 @@ export async function verifyLoginOtp(email: string, code: string): Promise<Login
 }
 
 export type ChangePasswordResult =
-  | { ok: true; role: "admin" | "client" }
+  | { ok: true; role: Role }
   | { ok: false; errors: string[] };
 
 // The one place mustChangePassword ever flips back to false — reached

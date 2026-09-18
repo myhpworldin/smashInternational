@@ -9,6 +9,11 @@ import { AGE_GROUPS } from "@/shared/types/onboarding";
 import { issuesToFieldErrors } from "@/lib/form/zodErrors";
 import { useFieldRegistry } from "@/lib/form/useFieldRegistry";
 import ValidationSummary from "@/components/form/ValidationSummary";
+import SaveStatusIndicator from "@/components/form/SaveStatusIndicator";
+import type { SaveStatus } from "@/store/useOnboardingDraftStore";
+import { readSectionCacheIfNewer } from "@/lib/onboarding/draftCache";
+import { useDraftCacheSync } from "@/lib/onboarding/useDraftCacheSync";
+import { useOpportunisticAutosave } from "@/lib/onboarding/useOpportunisticAutosave";
 
 const FIELD_ORDER = [
   "ageGroups",
@@ -32,7 +37,48 @@ type TargetAudienceStepProps = {
   onNext: (value: TargetAudienceInput) => Promise<void>;
   onBack: () => void;
   saving: boolean;
+  saveStatus: SaveStatus;
   saveMessage: string | null;
+  onboardingId: string;
+  serverUpdatedAt: string;
+};
+
+type AudienceFormState = {
+  ageGroups: string[];
+  gender: string[];
+  locations: string[];
+  customerType: string[];
+  interests: string[];
+  existingCustomerProfile: string;
+};
+
+// "All" means "every gender" (or every age group) — it can never be
+// combined with a specific selection. Applied wherever gender/ageGroups
+// enters local state (initial load, cache restore) so a value saved
+// before this rule existed self-heals instead of surfacing an impossible
+// combination.
+function normalizeAll(values: string[]): string[] {
+  if (values.includes("all") && values.length > 1) return ["all"];
+  return values;
+}
+
+const cachedOrInitial = (
+  onboardingId: string,
+  serverUpdatedAt: string,
+  initialValue: Partial<TargetAudienceInput> | null,
+): AudienceFormState => {
+  const cached = readSectionCacheIfNewer<AudienceFormState>(onboardingId, "targetAudience", serverUpdatedAt);
+  if (cached) {
+    return { ...cached, ageGroups: normalizeAll(cached.ageGroups), gender: normalizeAll(cached.gender) };
+  }
+  return {
+    ageGroups: normalizeAll(initialValue?.ageGroups ?? []),
+    gender: normalizeAll(initialValue?.gender ?? []),
+    locations: initialValue?.locations ?? [],
+    customerType: initialValue?.customerType ? [initialValue.customerType] : [],
+    interests: initialValue?.interests ?? [],
+    existingCustomerProfile: initialValue?.existingCustomerProfile ?? "",
+  };
 };
 
 const AGE_GROUP_OPTIONS = AGE_GROUPS.map((g) => ({ value: g.id, label: g.label }));
@@ -53,21 +99,38 @@ export default function TargetAudienceStep({
   onNext,
   onBack,
   saving,
+  saveStatus,
   saveMessage,
+  onboardingId,
+  serverUpdatedAt,
 }: TargetAudienceStepProps) {
-  const [ageGroups, setAgeGroups] = useState<string[]>(initialValue?.ageGroups ?? []);
-  const [gender, setGender] = useState<string[]>(initialValue?.gender ?? []);
-  const [locations, setLocations] = useState<string[]>(initialValue?.locations ?? []);
-  const [customerType, setCustomerType] = useState<string[]>(
-    initialValue?.customerType ? [initialValue.customerType] : [],
-  );
-  const [interests, setInterests] = useState<string[]>(initialValue?.interests ?? []);
-  const [existingCustomerProfile, setExistingCustomerProfile] = useState(
-    initialValue?.existingCustomerProfile ?? "",
-  );
+  const [initial] = useState(() => cachedOrInitial(onboardingId, serverUpdatedAt, initialValue));
+  const [ageGroups, setAgeGroups] = useState<string[]>(initial.ageGroups);
+  const [gender, setGender] = useState<string[]>(initial.gender);
+  const [locations, setLocations] = useState<string[]>(initial.locations);
+  const [customerType, setCustomerType] = useState<string[]>(initial.customerType);
+  const [interests, setInterests] = useState<string[]>(initial.interests);
+  const [existingCustomerProfile, setExistingCustomerProfile] = useState(initial.existingCustomerProfile);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [attempt, setAttempt] = useState(0);
   const { register, focusFirst } = useFieldRegistry();
+
+  // Enforces "All" as exclusive of every other option in a chip group:
+  // - selecting "All" while something else is already checked clears those
+  // - selecting a specific option while "All" is checked drops "All"
+  // ChipGroupField still owns the actual toggle (add/remove one value) —
+  // this only resolves the conflict in whatever it hands back.
+  const resolveAllExclusivity = (current: string[], next: string[]): string[] => {
+    const allJustToggled = next.includes("all") !== current.includes("all");
+    if (allJustToggled && next.includes("all")) return ["all"];
+    if (!allJustToggled && next.includes("all") && next.length > 1) {
+      return next.filter((v) => v !== "all");
+    }
+    return next;
+  };
+
+  const handleAgeGroupsChange = (next: string[]) => setAgeGroups(resolveAllExclusivity(ageGroups, next));
+  const handleGenderChange = (next: string[]) => setGender(resolveAllExclusivity(gender, next));
 
   const buildValue = () => ({
     ageGroups,
@@ -77,6 +140,20 @@ export default function TargetAudienceStep({
     interests,
     existingCustomerProfile,
   });
+
+  useDraftCacheSync(onboardingId, "targetAudience", {
+    ageGroups,
+    gender,
+    locations,
+    customerType,
+    interests,
+    existingCustomerProfile,
+  });
+  const validForAutosave = targetAudienceSchema.safeParse(buildValue());
+  useOpportunisticAutosave(
+    onboardingId,
+    validForAutosave.success ? { targetAudience: validForAutosave.data } : null,
+  );
 
   const validateField = (key: (typeof FIELD_ORDER)[number]) => {
     const parsed = targetAudienceSchema.safeParse(buildValue());
@@ -119,20 +196,22 @@ export default function TargetAudienceStep({
 
       <ChipGroupField
         label="Age group"
+        description="Select All if this applies to every age group, or pick specific ones."
         multiple
         options={AGE_GROUP_OPTIONS}
         value={ageGroups}
-        onChange={setAgeGroups}
+        onChange={handleAgeGroupsChange}
         error={errors.ageGroups}
         fieldRef={register("ageGroups")}
       />
 
       <ChipGroupField
         label="Gender"
+        description="Select All if this applies to every gender, or pick specific ones."
         multiple
         options={GENDER_OPTIONS}
         value={gender}
-        onChange={setGender}
+        onChange={handleGenderChange}
         error={errors.gender}
         fieldRef={register("gender")}
       />
@@ -179,10 +258,12 @@ export default function TargetAudienceStep({
         placeholder="e.g., Working professionals aged 25–40 in Tier 1 cities"
       />
 
-      {saveMessage && (
+      {saveMessage ? (
         <p role="alert" className="font-body text-xs text-smash-text">
           {saveMessage}
         </p>
+      ) : (
+        <SaveStatusIndicator status={saveStatus} />
       )}
 
       <ValidationSummary key={attempt} items={summaryItems} onSelect={(key) => focusFirst([key])} />

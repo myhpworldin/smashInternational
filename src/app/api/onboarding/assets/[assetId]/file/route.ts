@@ -4,6 +4,7 @@ import { Readable } from "node:stream";
 import { verifySession } from "@/server/auth/dal";
 import { getAssetById, resolveOnboardingIdentity } from "@/server/services/onboarding.service";
 import { openDownloadStream } from "@/server/storage/gridfs";
+import { isOwnedByClient } from "@/server/auth/ownership";
 
 export const runtime = "nodejs";
 
@@ -33,7 +34,7 @@ export async function GET(
 
     if (!isAdmin) {
       const { doc } = await resolveOnboardingIdentity();
-      if (!doc.clientId.equals(asset.clientId)) {
+      if (!isOwnedByClient(asset.clientId, doc.clientId)) {
         return NextResponse.json({ ok: false }, { status: 404 });
       }
     }

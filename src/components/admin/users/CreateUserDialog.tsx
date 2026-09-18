@@ -40,7 +40,17 @@ export default function CreateUserDialog({
   const valid = name.trim().length > 0 && /\S+@\S+\.\S+/.test(email);
 
   const handleCreate = async () => {
-    if (submitting || !valid) return;
+    if (submitting) return;
+
+    if (!valid) {
+      setError(
+        name.trim().length === 0
+          ? "Enter a name before creating this user."
+          : "Enter a valid email address before creating this user.",
+      );
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
 
@@ -89,7 +99,10 @@ export default function CreateUserDialog({
             id="create-name"
             type="text"
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => {
+              setName(e.target.value);
+              setError(null);
+            }}
             className="w-full rounded-none border border-white/15 bg-void px-3 py-2 font-body text-sm text-bone focus-visible:-outline-offset-2"
           />
         </div>
@@ -102,7 +115,10 @@ export default function CreateUserDialog({
             id="create-email"
             type="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              setError(null);
+            }}
             className="w-full rounded-none border border-white/15 bg-void px-3 py-2 font-body text-sm text-bone focus-visible:-outline-offset-2"
           />
         </div>
@@ -124,7 +140,7 @@ export default function CreateUserDialog({
         <div className="flex flex-col gap-1">
           <span className="font-body text-xs text-ash uppercase">Role</span>
           <div className="flex gap-2">
-            {(["admin", "client"] as Role[]).map((option) => (
+            {(["admin", "client", "staff"] as Role[]).map((option) => (
               <label
                 key={option}
                 className={`flex flex-1 cursor-pointer items-center justify-center gap-2 border px-3 py-2 font-body text-sm transition-colors duration-150 ${
@@ -139,7 +155,7 @@ export default function CreateUserDialog({
                   onChange={() => setRole(option)}
                   className="accent-smash"
                 />
-                {option === "admin" ? "Admin" : "Client"}
+                {option === "admin" ? "Admin" : option === "client" ? "Client" : "Staff"}
               </label>
             ))}
           </div>
@@ -187,7 +203,7 @@ export default function CreateUserDialog({
         <button
           type="button"
           onClick={handleCreate}
-          disabled={submitting || !valid}
+          disabled={submitting}
           aria-busy={submitting}
           className="rounded-none bg-white px-[18px] py-[14px] font-body text-sm text-void disabled:opacity-60 focus-visible:-outline-offset-2"
         >

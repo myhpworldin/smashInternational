@@ -3,7 +3,17 @@
 import { useEffect, useRef, useState } from "react";
 import type { AdminUserRow } from "@/shared/types/adminUser";
 
-export type UserAction = "view" | "edit" | "role" | "block" | "unblock" | "password" | "copy" | "share";
+export type UserAction =
+  | "view"
+  | "edit"
+  | "role"
+  | "block"
+  | "unblock"
+  | "password"
+  | "copy"
+  | "share"
+  | "availability"
+  | "handovers";
 
 export default function UserActionsMenu({
   user,
@@ -37,6 +47,12 @@ export default function UserActionsMenu({
     { action: "view", label: "View" },
     { action: "edit", label: "Edit" },
     { action: "role", label: "Change Role" },
+    ...(user.role === "staff"
+      ? [
+          { action: "availability" as const, label: "Manage Availability" },
+          { action: "handovers" as const, label: "View Handovers" },
+        ]
+      : []),
     user.status === "blocked"
       ? { action: "unblock", label: "Unblock" }
       : { action: "block", label: "Block", disabled: isSelf },

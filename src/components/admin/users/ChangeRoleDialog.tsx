@@ -49,7 +49,7 @@ export default function ChangeRoleDialog({
   return (
     <Modal open={open} onClose={onClose} title="Change role">
       <p className="font-body text-sm text-ash">
-        Only Admin and Client roles exist in this system.
+        Admin, Client, and Staff roles exist in this system.
       </p>
 
       <p className="font-body text-sm text-bone">
@@ -64,7 +64,7 @@ export default function ChangeRoleDialog({
 
       <fieldset className="flex flex-col gap-2">
         <legend className="sr-only">New role for {user.name}</legend>
-        {(["admin", "client"] as Role[]).map((option) => (
+        {(["admin", "client", "staff"] as Role[]).map((option) => (
           <label
             key={option}
             className={`flex cursor-pointer items-center gap-2 border px-3 py-2 font-body text-sm transition-colors duration-150 ${

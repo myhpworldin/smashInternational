@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ObjectId } from "mongodb";
 import { requireRole } from "@/server/auth/dal";
-import { getForAdmin, listAssets } from "@/server/services/onboarding.service";
+import { getForAdmin, listAssets, getOnboardingStatusHistory } from "@/server/services/onboarding.service";
 import { ONBOARDING_ADMIN_LABEL, BUSINESS_OBJECTIVES } from "@/shared/types/onboarding";
 import { getServiceById } from "@/shared/config/services";
 import { formatINR } from "@/lib/format/currency";
@@ -9,6 +9,19 @@ import { formatDateTime } from "@/lib/format/date";
 import AdminServiceRequirements from "@/components/admin/AdminServiceRequirements";
 import AdminAssetsList from "@/components/admin/AdminAssetsList";
 import AdminReviewActions from "@/components/admin/AdminReviewActions";
+import AssignmentsPanel from "@/components/admin/AssignmentsPanel";
+import ServiceEngagementsPanel from "@/components/admin/ServiceEngagementsPanel";
+import { listAssignmentsForOnboarding } from "@/server/services/serviceAssignments.service";
+import { listAssignableStaffForAdmin } from "@/server/services/adminUsers.service";
+import { listEngagementsForOnboarding } from "@/server/services/serviceEngagements.service";
+import { listProjectsForClient } from "@/server/services/projects.service";
+import { listCampaignsForClient } from "@/server/services/campaigns.service";
+import { getBudgetForClient, listBudgetRequestsForClient } from "@/server/services/budget.service";
+import AdminProjectsPanel from "@/components/admin/AdminProjectsPanel";
+import AdminCampaignsPanel from "@/components/admin/AdminCampaignsPanel";
+import AdminBudgetPanel from "@/components/admin/AdminBudgetPanel";
+import AdminBudgetRequestsPanel from "@/components/admin/AdminBudgetRequestsPanel";
+import AdminPerformanceEntryPanel from "@/components/admin/AdminPerformanceEntryPanel";
 import type {
   CompanyInput,
   ObjectivesInput,
@@ -24,7 +37,7 @@ export default async function AdminOnboardingDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireRole("admin");
+  const session = await requireRole("admin");
   const { id } = await params;
 
   if (!ObjectId.isValid(id)) {
@@ -38,7 +51,7 @@ export default async function AdminOnboardingDetailPage({
     );
   }
 
-  const doc = await getForAdmin(new ObjectId(id));
+  const doc = await getForAdmin(new ObjectId(id), new ObjectId(session.userId));
   if (!doc) {
     return (
       <main className="px-6 py-10 md:px-10">
@@ -51,6 +64,25 @@ export default async function AdminOnboardingDetailPage({
   }
 
   const assets = await listAssets(doc._id);
+  const assignments = await listAssignmentsForOnboarding(doc._id.toHexString());
+  const assignableStaff = await listAssignableStaffForAdmin();
+  const engagements = await listEngagementsForOnboarding(doc._id);
+  const statusHistory = await getOnboardingStatusHistory(doc._id);
+  // Stage 1 Phase 13 — the same client-facing adapters the client portal
+  // itself reads from (Phase 9/12), reused here rather than duplicated:
+  // whatever an admin eventually saves through these new panels is
+  // exactly what the client's own pages would show, by construction.
+  const [clientProjects, clientCampaigns, budgetSnapshot, budgetRequests] = await Promise.all([
+    listProjectsForClient(doc.clientId),
+    listCampaignsForClient(doc.clientId),
+    getBudgetForClient(doc.clientId),
+    listBudgetRequestsForClient(doc.clientId),
+  ]);
+  const engagedServiceOptions = engagements.map((e) => ({
+    id: e.serviceId,
+    label: e.serviceLabel,
+    engagementId: e.id,
+  }));
 
   const company = doc.company as Partial<CompanyInput> | null;
   const objectives = doc.objectives as Partial<ObjectivesInput> | null;
@@ -125,6 +157,48 @@ export default async function AdminOnboardingDetailPage({
         )}
       </Section>
 
+      <Section title="Service engagements">
+        <ServiceEngagementsPanel initialEngagements={engagements} />
+      </Section>
+
+      <Section title="Projects">
+        <AdminProjectsPanel
+          clientId={doc.clientId.toHexString()}
+          serviceOptions={engagedServiceOptions}
+          projects={clientProjects}
+        />
+      </Section>
+
+      <Section title="Campaigns">
+        <AdminCampaignsPanel
+          clientId={doc.clientId.toHexString()}
+          serviceOptions={engagedServiceOptions}
+          campaigns={clientCampaigns}
+        />
+      </Section>
+
+      <Section title="Budget (actual spend)">
+        <AdminBudgetPanel clientId={doc.clientId.toHexString()} snapshot={budgetSnapshot} />
+      </Section>
+
+      <Section title="Budget requests">
+        <AdminBudgetRequestsPanel requests={budgetRequests} />
+      </Section>
+
+      <Section title="Performance entry">
+        <AdminPerformanceEntryPanel clientId={doc.clientId.toHexString()} serviceOptions={engagedServiceOptions} />
+      </Section>
+
+      <Section title="Service assignments">
+        <AssignmentsPanel
+          onboardingId={doc._id.toHexString()}
+          companyName={company?.name ?? "(no company name yet)"}
+          services={services.map((s) => ({ id: s!.id, label: s!.label }))}
+          initialAssignments={assignments}
+          assignableStaff={assignableStaff}
+        />
+      </Section>
+
       {brandProfile && (
         <Section title="Brand profile">
           <FieldGrid>
@@ -180,6 +254,22 @@ export default async function AdminOnboardingDetailPage({
             </>
           )}
         </FieldGrid>
+
+        {statusHistory.length > 0 && (
+          <div className="mt-2 flex flex-col gap-1">
+            <p className="font-body text-xs tracking-[0.14em] text-ash uppercase">Status history</p>
+            <ul className="flex flex-col gap-1 font-body text-xs text-ash">
+              {statusHistory.map((entry) => (
+                <li key={entry.id}>
+                  {entry.previousStatus ? `${entry.previousStatus} → ${entry.newStatus}` : entry.newStatus} by{" "}
+                  <span className="text-bone">{entry.changedByEmail}</span> ({entry.changedByRole}) —{" "}
+                  {formatDateTime(entry.changedAt)}
+                  {entry.reason ? ` — "${entry.reason}"` : ""}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </Section>
 
       {ACTIONABLE_STATUSES.has(doc.status) && <AdminReviewActions onboardingId={doc._id.toHexString()} />}

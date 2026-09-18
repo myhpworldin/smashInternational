@@ -3,10 +3,9 @@ import { isServicesStepComplete, type OnboardingDraftShape } from "@/shared/onbo
 
 // The state model this phase asks for — deliberately only these four
 // progress states, mapped from the *real* status/draft data the onboarding
-// backend already tracks (see src/server/repositories/onboarding.repo.ts),
-// not a separate mock of its own. Only the "authenticated" half of the
-// picture is mocked (see lib/mock/clientSession.ts); onboarding progress
-// is real and already persists correctly across a refresh on its own.
+// backend already tracks (see src/server/repositories/onboarding.repo.ts).
+// Both auth and onboarding progress are real (session-derived) as of
+// Stage 1 Phase 6 — there is no mock layer left in this file's picture.
 export type OnboardingProgressState = "not_started" | "incomplete" | "submitted" | "approved";
 
 export function resolveOnboardingProgress(
@@ -24,22 +23,23 @@ export function resolveOnboardingProgress(
 
 export type ClientAuthStatus = "unauthenticated" | "authenticated";
 
-// Section 6's redirect logic, expressed as one small pure function rather
-// than scattered across every call site — a real backend swap only ever
-// needs to change what feeds into this, never this function itself.
-//
-// "submitted" and "not_started"/"incomplete" all currently resolve to the
-// same /onboarding URL: that page already branches internally between the
-// wizard and the "Under Review" status screen based on the real status
-// (a decision made explicitly in Stage 1 Phase 4, not an oversight here) —
-// there is no separate /onboarding/status route to send them to instead.
+// Stage 1 Phase 6 fix: previously only "approved" landed on /dashboard,
+// with "submitted"/"under_review" sent to /onboarding's status screen
+// instead — that was correct before Phase 2/4, but /dashboard has since
+// grown its own "Under Review" account-status state (and a
+// changes_requested one, and a not-started one), making it the intended
+// home for every authenticated client regardless of onboarding progress.
+// Only a client who hasn't finished the wizard yet (never started, or
+// started but didn't finish) is sent straight to /onboarding instead —
+// they have real work to do there, so skipping the dashboard detour is
+// the better UX, not an oversight.
 export function resolveClientDestination(
   auth: ClientAuthStatus,
   progress: OnboardingProgressState | null,
 ): string {
   if (auth === "unauthenticated") return "/login";
-  if (progress === "approved") return "/dashboard";
-  return "/onboarding";
+  if (progress === "not_started" || progress === "incomplete") return "/onboarding";
+  return "/dashboard";
 }
 
 // The "LOGIN → determine onboarding state → appropriate destination"

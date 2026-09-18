@@ -17,6 +17,11 @@ const ROLE_HOME: Record<string, string> = {
   // same fallback resolveClientDestination() uses client-side. Previously
   // missing entirely, which sent an authenticated client to "/" instead.
   client: "/onboarding",
+  // Missing here had the exact same failure mode client's absence used to:
+  // any authenticated staff session hitting /login, /admin, /signup, or
+  // /verify-email fell through the `?? "/"` fallback below and got bounced
+  // to the marketing homepage instead of their own area.
+  staff: "/staff",
 };
 
 const ONBOARDING_ACCESS_MAX_AGE_SECONDS = 60 * 60 * 24 * 365;
@@ -26,6 +31,7 @@ export async function proxy(request: NextRequest) {
   const session = await decrypt(request.cookies.get("session")?.value);
 
   const isAdminRoute = pathname.startsWith("/admin");
+  const isStaffRoute = pathname.startsWith("/staff");
   // /signup and /verify-email belong here too: an already-authenticated
   // visitor landing on any of these (fresh navigation, typed URL, or the
   // browser's back button after finishing signup/login) must never be
@@ -35,11 +41,15 @@ export async function proxy(request: NextRequest) {
   const isAuthEntryRoute = pathname === "/login" || pathname === "/signup" || pathname === "/verify-email";
   const isOnboardingRoute = pathname === "/onboarding" || pathname.startsWith("/api/onboarding");
 
-  if (isAdminRoute && !session) {
+  if ((isAdminRoute || isStaffRoute) && !session) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
   if (isAdminRoute && session && session.role !== "admin") {
+    return NextResponse.redirect(new URL(ROLE_HOME[session.role] ?? "/", request.url));
+  }
+
+  if (isStaffRoute && session && session.role !== "staff") {
     return NextResponse.redirect(new URL(ROLE_HOME[session.role] ?? "/", request.url));
   }
 
@@ -98,5 +108,13 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/login", "/signup", "/verify-email", "/onboarding", "/api/onboarding/:path*"],
+  matcher: [
+    "/admin/:path*",
+    "/staff/:path*",
+    "/login",
+    "/signup",
+    "/verify-email",
+    "/onboarding",
+    "/api/onboarding/:path*",
+  ],
 };

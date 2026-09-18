@@ -12,7 +12,7 @@ export type OnboardingDraft = {
   budget: Record<string, unknown> | null;
 };
 
-type SaveStatus = "idle" | "saving" | "saved" | "error";
+export type SaveStatus = "idle" | "saving" | "saved" | "error";
 
 type SaveResult = { ok: true } | { ok: false; unauthorized: boolean; message: string };
 

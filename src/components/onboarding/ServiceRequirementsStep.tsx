@@ -15,6 +15,11 @@ import BrandProfileSection from "@/components/onboarding/BrandProfileSection";
 import AssetsPanel from "@/components/onboarding/AssetsPanel";
 import { useFieldRegistry } from "@/lib/form/useFieldRegistry";
 import ValidationSummary, { type ValidationSummaryItem } from "@/components/form/ValidationSummary";
+import SaveStatusIndicator from "@/components/form/SaveStatusIndicator";
+import type { SaveStatus } from "@/store/useOnboardingDraftStore";
+import { readSectionCacheIfNewer } from "@/lib/onboarding/draftCache";
+import { useDraftCacheSync } from "@/lib/onboarding/useDraftCacheSync";
+import { useOpportunisticAutosave } from "@/lib/onboarding/useOpportunisticAutosave";
 
 type ServiceResponseEntry = { serviceId: string; responses: Record<string, unknown> };
 
@@ -96,7 +101,10 @@ type ServiceRequirementsStepProps = {
   onBack: () => void;
   onEditServices: () => void;
   saving: boolean;
+  saveStatus: SaveStatus;
   saveMessage: string | null;
+  onboardingId: string;
+  serverUpdatedAt: string;
 };
 
 function initialResponsesByService(
@@ -121,18 +129,39 @@ export default function ServiceRequirementsStep({
   onBack,
   onEditServices,
   saving,
+  saveStatus,
   saveMessage,
+  onboardingId,
+  serverUpdatedAt,
 }: ServiceRequirementsStepProps) {
-  const [responsesByService, setResponsesByService] = useState(() =>
-    initialResponsesByService(selectedServiceIds, initialServiceResponses),
-  );
-  const [brandProfile, setBrandProfile] = useState<Record<string, unknown>>(
-    () => initialBrandProfile ?? {},
-  );
+  const [responsesByService, setResponsesByService] = useState(() => {
+    const cached = readSectionCacheIfNewer<Record<string, Record<string, unknown>>>(
+      onboardingId,
+      "serviceResponses",
+      serverUpdatedAt,
+    );
+    const base = cached ?? initialResponsesByService(selectedServiceIds, initialServiceResponses);
+    // Re-intersected with the currently selected services regardless of
+    // where `base` came from — a service removed since this snapshot was
+    // written must not resurrect its old responses (the same rule
+    // saveDraft already enforces server-side for the real save).
+    const filtered: Record<string, Record<string, unknown>> = {};
+    for (const id of selectedServiceIds) {
+      filtered[id] = base[id] ?? {};
+    }
+    return filtered;
+  });
+  const [brandProfile, setBrandProfile] = useState<Record<string, unknown>>(() => {
+    const cached = readSectionCacheIfNewer<Record<string, unknown>>(onboardingId, "brandProfile", serverUpdatedAt);
+    return cached ?? initialBrandProfile ?? {};
+  });
   const [generalErrors, setGeneralErrors] = useState<string[]>([]);
   const [brandErrors, setBrandErrors] = useState<Record<string, string>>({});
   const [attempt, setAttempt] = useState(0);
   const { register, focusFirst } = useFieldRegistry();
+
+  useDraftCacheSync(onboardingId, "serviceResponses", responsesByService);
+  useDraftCacheSync(onboardingId, "brandProfile", brandProfile);
 
   const needsBrandProfile = selectedServicesNeedBrandProfile(selectedServiceIds);
   const needsAssets = selectedServicesNeedAssets(selectedServiceIds);
@@ -283,6 +312,19 @@ export default function ServiceRequirementsStep({
     ...parseServiceErrorItems(generalErrors, services),
   ];
 
+  const entriesForAutosave = currentEntries();
+  const serviceErrorsForAutosave = validateServiceResponses(selectedServiceIds, entriesForAutosave);
+  useOpportunisticAutosave(
+    onboardingId,
+    serviceErrorsForAutosave.length === 0 ? { serviceResponses: entriesForAutosave } : null,
+  );
+
+  const brandParsedForAutosave = needsBrandProfile ? brandProfileSchema.safeParse(brandProfile) : null;
+  useOpportunisticAutosave(
+    onboardingId,
+    brandParsedForAutosave?.success ? { brandProfile: brandParsedForAutosave.data } : null,
+  );
+
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -353,10 +395,12 @@ export default function ServiceRequirementsStep({
         </div>
       ))}
 
-      {saveMessage && (
+      {saveMessage ? (
         <p role="alert" className="font-body text-xs text-smash-text">
           {saveMessage}
         </p>
+      ) : (
+        <SaveStatusIndicator status={saveStatus} />
       )}
 
       <ValidationSummary key={attempt} items={summaryItems} onSelect={(key) => focusFirst([key])} />

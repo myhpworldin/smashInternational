@@ -13,6 +13,7 @@ const ROLE_TABS: { id?: string; label: string }[] = [
   { id: undefined, label: "All roles" },
   { id: "admin", label: "Admin" },
   { id: "client", label: "Client" },
+  { id: "staff", label: "Staff" },
 ];
 
 // Same plain-links-plus-GET-form pattern as OnboardingListFilters — a

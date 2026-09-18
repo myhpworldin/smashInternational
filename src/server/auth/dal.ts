@@ -96,3 +96,22 @@ export async function getAuthorizedAdmin(): Promise<UserDoc | null> {
   if (!user || user.role !== "admin" || user.mustChangePassword) return null;
   return user;
 }
+
+// Same shape as getAuthorizedAdmin, for staff-only API routes (e.g.
+// /api/staff/assignments) — a non-redirecting check, since a route
+// handler needs a 401/403 response, not a page redirect.
+export async function getAuthorizedStaff(): Promise<UserDoc | null> {
+  const user = await getCurrentUser();
+  if (!user || user.role !== "staff" || user.mustChangePassword) return null;
+  return user;
+}
+
+// Same shape again, for client-only API routes (Stage 1 Phase 3's
+// service-engagement read endpoint) — the one place a client-facing route
+// gets its clientId from, so ownership is always session-derived, never
+// anything the request itself supplied (Phase 3 §19).
+export async function getAuthorizedClient(): Promise<UserDoc | null> {
+  const user = await getCurrentUser();
+  if (!user || user.role !== "client" || user.mustChangePassword) return null;
+  return user;
+}

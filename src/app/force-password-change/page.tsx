@@ -21,8 +21,8 @@ export default async function ForcePasswordChangePage() {
   if (!user.mustChangePassword) {
     // Already done (e.g. a stale tab reopened after completing this
     // elsewhere) — send them on rather than showing this page again.
-    redirect(user.role === "admin" ? "/admin" : "/onboarding");
+    redirect(user.role === "admin" ? "/admin" : user.role === "staff" ? "/staff" : "/onboarding");
   }
 
-  return <ChangePasswordModal />;
+  return <ChangePasswordModal email={user.email} />;
 }

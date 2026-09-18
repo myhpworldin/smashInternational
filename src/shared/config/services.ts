@@ -549,25 +549,54 @@ export function selectedServicesNeedAssets(selectedServiceIds: string[]): boolea
   return selectedServiceIds.some((id) => getServiceById(id)?.needsAssets);
 }
 
-// Which of the documented advertising channels are actually relevant —
-// Meta Ads only if Social Media Advertising is selected, Google Ads only if
-// Google Ads is selected. "Other" is appended once any channel applies, so
-// a client with ad spend the two named channels don't cover has somewhere
-// to put it, without treating budget as a general/forced field otherwise.
+// Named channels for the two services that are themselves paid ad spend —
+// kept as their own fixed values ("meta_ads"/"google_ads", not the
+// service id) so a budget allocation saved against either one before this
+// file supported per-service channels keeps matching correctly.
 const ADVERTISING_CHANNEL_BY_SERVICE: Record<string, ServiceFieldOption> = {
   social_media_advertising: { value: "meta_ads", label: "Meta Ads" },
   google_ads: { value: "google_ads", label: "Google Ads" },
 };
 
-export function getApplicableBudgetChannels(selectedServiceIds: string[]): ServiceFieldOption[] {
-  const channels = selectedServiceIds
-    .map((id) => ADVERTISING_CHANNEL_BY_SERVICE[id])
-    .filter((c): c is ServiceFieldOption => Boolean(c));
+// The Budget step itself is only relevant once real ad spend is involved —
+// selecting only non-advertising services (e.g. SEO, Website Development)
+// never shows it, unchanged from before.
+function hasAdvertisingService(selectedServiceIds: string[]): boolean {
+  return selectedServiceIds.some((id) => id in ADVERTISING_CHANNEL_BY_SERVICE);
+}
 
-  if (channels.length === 0) return [];
+// Once the Budget step is showing at all, every selected service gets its
+// own allocation row (not just the two paid-ads ones) — a client running
+// Google Ads alongside SEO and Website Development should be able to
+// break their monthly budget down across all three, not lump everything
+// but ads into one generic "Other" line. "Other" is still appended after
+// every named row, for spend that doesn't belong to any selected service.
+export function getApplicableBudgetChannels(selectedServiceIds: string[]): ServiceFieldOption[] {
+  if (!hasAdvertisingService(selectedServiceIds)) return [];
+
+  const channels: ServiceFieldOption[] = [];
+  const seenValues = new Set<string>();
+
+  for (const id of selectedServiceIds) {
+    const adChannel = ADVERTISING_CHANNEL_BY_SERVICE[id];
+    if (adChannel) {
+      if (!seenValues.has(adChannel.value)) {
+        channels.push(adChannel);
+        seenValues.add(adChannel.value);
+      }
+      continue;
+    }
+
+    const service = getServiceById(id);
+    if (service && !seenValues.has(id)) {
+      channels.push({ value: id, label: service.label });
+      seenValues.add(id);
+    }
+  }
+
   return [...channels, { value: "other", label: "Other" }];
 }
 
 export function selectedServicesNeedBudget(selectedServiceIds: string[]): boolean {
-  return getApplicableBudgetChannels(selectedServiceIds).length > 0;
+  return hasAdvertisingService(selectedServiceIds);
 }

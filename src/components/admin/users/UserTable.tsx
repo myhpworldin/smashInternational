@@ -1,6 +1,6 @@
 import type { AdminUserRow } from "@/shared/types/adminUser";
 import { formatDateTime } from "@/lib/format/date";
-import { RoleBadge, StatusBadge, VerificationBadge } from "./Badges";
+import { RoleBadge, StatusBadge, VerificationBadge, AvailabilityBadge } from "./Badges";
 import UserActionsMenu, { type UserAction } from "./UserActionsMenu";
 
 export default function UserTable({
@@ -44,7 +44,10 @@ export default function UserTable({
                   <RoleBadge role={user.role} />
                 </td>
                 <td className="py-3 pr-4">
-                  <StatusBadge status={user.status} />
+                  <div className="flex flex-wrap gap-1">
+                    <StatusBadge status={user.status} />
+                    {user.availability && <AvailabilityBadge availability={user.availability} />}
+                  </div>
                 </td>
                 <td className="py-3 pr-4">
                   <VerificationBadge user={user} />
@@ -73,6 +76,7 @@ export default function UserTable({
             <div className="flex flex-wrap items-center gap-2">
               <RoleBadge role={user.role} />
               <StatusBadge status={user.status} />
+              {user.availability && <AvailabilityBadge availability={user.availability} />}
               <VerificationBadge user={user} />
               {user.mustChangePassword && (
                 <span className="border border-white/15 px-1.5 py-0.5 font-body text-[10px] text-ash uppercase">

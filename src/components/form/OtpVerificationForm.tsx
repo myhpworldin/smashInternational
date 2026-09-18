@@ -8,7 +8,6 @@ import StepTransition from "@/components/onboarding/StepTransition";
 import StatusIcon from "@/components/onboarding/StatusIcon";
 import { resendSignupOtp, verifySignupOtp } from "@/lib/otp/signupTransport";
 import { maskEmail } from "@/lib/format/maskEmail";
-import { writeMockClientSession } from "@/lib/mock/clientSession";
 
 const OTP_LENGTH = 6;
 const RESEND_COOLDOWN_SECONDS = 30;
@@ -108,10 +107,6 @@ export default function OtpVerificationForm() {
     verifySignupOtp(email, code).then((result) => {
       if (result.ok) {
         setState("verified");
-        // Verifying signup's email OTP is this mock's "you're a client
-        // now" moment — see lib/mock/clientSession.ts for what this is
-        // and isn't.
-        writeMockClientSession({ role: "client" });
         setTimeout(() => router.push("/onboarding"), VERIFIED_PAUSE_MS);
       } else if (result.reason === "network") {
         setState("network_error");

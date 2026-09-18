@@ -53,7 +53,10 @@ export async function listAuditLogsForAdmin(params: {
 }): Promise<{ records: AuditLogRow[]; total: number; page: number; pageSize: number }> {
   const filter: auditLogRepo.AuditLogFilter = {
     action: params.action && isAuditAction(params.action) ? params.action : undefined,
-    targetRole: params.role === "admin" || params.role === "client" ? (params.role as Role) : undefined,
+    targetRole:
+      params.role === "admin" || params.role === "client" || params.role === "staff"
+        ? (params.role as Role)
+        : undefined,
     q: params.q,
     from: params.from && !Number.isNaN(Date.parse(params.from)) ? new Date(params.from) : undefined,
     // Inclusive of the whole "to" day — a bare date parses to 00:00:00,

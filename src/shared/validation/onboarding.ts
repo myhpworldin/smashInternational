@@ -5,10 +5,11 @@ import {
   isValidServiceId,
   selectedServicesNeedBrandProfile,
   selectedServicesNeedBudget,
+  type ServiceFieldDef,
 } from "@/shared/config/services";
 import { MAX_ASSET_SIZE_BYTES, type AgeGroup, type AssetType, type BusinessObjective, type Gender } from "@/shared/types/onboarding";
 
-const AGE_GROUP_VALUES = ["18_24", "25_34", "35_44", "45_54", "55_plus"] as const;
+const AGE_GROUP_VALUES = ["18_24", "25_34", "35_44", "45_54", "55_plus", "all"] as const;
 const GENDER_VALUES = ["male", "female", "other", "all"] as const;
 const CUSTOMER_TYPE_VALUES = ["b2b", "b2c", "both"] as const;
 const OBJECTIVE_VALUES = [
@@ -24,7 +25,6 @@ const ASSET_TYPE_VALUES = [
   "logo",
   "brand_guidelines",
   "product_images",
-  "videos",
   "existing_creatives",
   "brochures",
   "catalogues",
@@ -199,6 +199,7 @@ export function validateSelectedServiceIds(ids: string[]): string[] {
 const MAX_SHORT_TEXT_LENGTH = 500;
 const MAX_LONG_TEXT_LENGTH = 5000;
 const MAX_SERVICE_NUMBER = 1_000_000;
+const MAX_GROUP_ENTRIES = 20;
 
 // Every field type the dynamic service-form engine supports (see
 // shared/config/services.ts) gets a real bound here — the catalog only
@@ -243,6 +244,70 @@ function fieldValueLooksValid(type: string, value: unknown, options?: { value: s
   }
 }
 
+// A groupList field's value is an array of per-entry records (e.g. one
+// record per campaign objective) rather than a single scalar — validated
+// entry-by-entry against its own `groupFields`, with errors routed back to
+// the exact entry/sub-field via "serviceId.fieldKey[index].subKey" so the UI
+// can attach them to the right control instead of the whole list.
+function validateGroupListField(
+  serviceId: string,
+  field: ServiceFieldDef,
+  value: unknown,
+  errors: string[],
+): void {
+  const entries = Array.isArray(value) ? value : [];
+
+  if (entries.length === 0) {
+    if (field.required) {
+      errors.push(`${serviceId}.${field.key}: "${field.label}" needs at least one entry`);
+    }
+    return;
+  }
+
+  if (entries.length > MAX_GROUP_ENTRIES) {
+    errors.push(`${serviceId}.${field.key}: "${field.label}" has too many entries`);
+    return;
+  }
+
+  const groupFields = field.groupFields ?? [];
+  const knownKeys = new Set(groupFields.map((f) => f.key));
+
+  entries.forEach((rawEntry, index) => {
+    if (typeof rawEntry !== "object" || rawEntry === null || Array.isArray(rawEntry)) {
+      errors.push(`${serviceId}.${field.key}[${index}]: invalid entry`);
+      return;
+    }
+    const entry = rawEntry as Record<string, unknown>;
+
+    for (const subField of groupFields) {
+      if (!isFieldActive(subField, entry)) continue;
+
+      const value = entry[subField.key];
+
+      if (value === undefined || value === null || value === "") {
+        if (subField.required) {
+          errors.push(
+            `${serviceId}.${field.key}[${index}].${subField.key}: "${subField.label}" is required`,
+          );
+        }
+        continue;
+      }
+
+      if (!fieldValueLooksValid(subField.type, value, subField.options)) {
+        errors.push(
+          `${serviceId}.${field.key}[${index}].${subField.key}: "${subField.label}" has an invalid value`,
+        );
+      }
+    }
+
+    for (const key of Object.keys(entry)) {
+      if (!knownKeys.has(key)) {
+        errors.push(`${serviceId}.${field.key}[${index}]: unknown field "${key}"`);
+      }
+    }
+  });
+}
+
 export function validateServiceResponses(
   selectedServiceIds: string[],
   entries: ServiceResponseEntry[],
@@ -264,6 +329,11 @@ export function validateServiceResponses(
 
     for (const field of service.fields) {
       if (!isFieldActive(field, entry.responses)) continue;
+
+      if (field.type === "groupList") {
+        validateGroupListField(entry.serviceId, field, entry.responses[field.key], errors);
+        continue;
+      }
 
       const value = entry.responses[field.key];
 

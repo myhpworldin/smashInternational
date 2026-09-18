@@ -1,6 +1,6 @@
 import * as z from "zod/mini";
 
-const ROLE_VALUES = ["admin", "client"] as const;
+const ROLE_VALUES = ["admin", "client", "staff"] as const;
 const STATUS_VALUES = ["active", "blocked"] as const;
 
 export const createUserByAdminSchema = z.object({

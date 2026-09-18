@@ -53,7 +53,7 @@ export const BUSINESS_OBJECTIVES: { id: BusinessObjective; label: string }[] = [
   { id: "other", label: "Other" },
 ];
 
-export type AgeGroup = "18_24" | "25_34" | "35_44" | "45_54" | "55_plus";
+export type AgeGroup = "18_24" | "25_34" | "35_44" | "45_54" | "55_plus" | "all";
 
 export const AGE_GROUPS: { id: AgeGroup; label: string }[] = [
   { id: "18_24", label: "18–24" },
@@ -61,6 +61,7 @@ export const AGE_GROUPS: { id: AgeGroup; label: string }[] = [
   { id: "35_44", label: "35–44" },
   { id: "45_54", label: "45–54" },
   { id: "55_plus", label: "55+" },
+  { id: "all", label: "All" },
 ];
 
 export type Gender = "male" | "female" | "other" | "all";
@@ -71,7 +72,6 @@ export type AssetType =
   | "logo"
   | "brand_guidelines"
   | "product_images"
-  | "videos"
   | "existing_creatives"
   | "brochures"
   | "catalogues";
@@ -80,7 +80,6 @@ export const ASSET_TYPES: { id: AssetType; label: string }[] = [
   { id: "logo", label: "Logo" },
   { id: "brand_guidelines", label: "Brand Guidelines" },
   { id: "product_images", label: "Product Images" },
-  { id: "videos", label: "Videos" },
   { id: "existing_creatives", label: "Existing Creatives" },
   { id: "brochures", label: "Brochures" },
   { id: "catalogues", label: "Catalogues" },
@@ -95,8 +94,18 @@ export const ALLOWED_MIME_BY_ASSET_TYPE: Record<AssetType, string[]> = {
   logo: ["image/png", "image/jpeg", "image/svg+xml", "image/webp"],
   brand_guidelines: ["application/pdf", "image/png", "image/jpeg"],
   product_images: ["image/png", "image/jpeg", "image/webp"],
-  videos: ["video/mp4", "video/quicktime", "video/webm"],
-  existing_creatives: ["image/png", "image/jpeg", "image/webp", "video/mp4", "application/pdf"],
+  // Covers what the removed dedicated "Videos" category used to accept
+  // (video/mp4, video/quicktime, video/webm) — a video still belongs
+  // somewhere, and "Existing Creatives" is the closest fit.
+  existing_creatives: [
+    "image/png",
+    "image/jpeg",
+    "image/webp",
+    "video/mp4",
+    "video/quicktime",
+    "video/webm",
+    "application/pdf",
+  ],
   brochures: ["application/pdf"],
   catalogues: ["application/pdf"],
 };

@@ -10,6 +10,7 @@ const ROLE_TABS: { id: RoleFilter; label: string }[] = [
   { id: "all", label: "All roles" },
   { id: "admin", label: "Admin" },
   { id: "client", label: "Client" },
+  { id: "staff", label: "Staff" },
 ];
 
 const STATUS_TABS: { id: StatusFilter; label: string }[] = [

@@ -5,9 +5,10 @@ import Link from "next/link";
 // the primary user table). Same tab-row visual language as
 // OnboardingListFilters' status tabs, so this reads as the same admin
 // area rather than a bolted-on new one.
-export default function UserManagementTabs({ active }: { active: "users" | "audit-log" }) {
-  const tabs: { id: "users" | "audit-log"; label: string; href: string }[] = [
+export default function UserManagementTabs({ active }: { active: "users" | "audit-log" | "handovers" }) {
+  const tabs: { id: "users" | "audit-log" | "handovers"; label: string; href: string }[] = [
     { id: "users", label: "Users", href: "/admin/users" },
+    { id: "handovers", label: "Handovers", href: "/admin/users/handovers" },
     { id: "audit-log", label: "Audit Log", href: "/admin/users/audit-log" },
   ];
 

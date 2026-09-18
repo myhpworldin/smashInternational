@@ -1,9 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { AdminUserRow, AdminUserStatus, CreatedAdminUser } from "@/shared/types/adminUser";
 import type { Role } from "@/shared/types/user";
-import { ADMIN_USER_ROLE_LABEL, ADMIN_USER_STATUS_LABEL } from "@/shared/types/adminUser";
+import { ADMIN_USER_ROLE_LABEL, ADMIN_USER_STATUS_LABEL, STAFF_AVAILABILITY_LABEL } from "@/shared/types/adminUser";
 import { formatDateTime } from "@/lib/format/date";
 import UserFilters from "./UserFilters";
 import UserTable from "./UserTable";
@@ -15,6 +16,8 @@ import ConfirmActionDialog, { type ActionResult } from "./ConfirmActionDialog";
 import CreateUserDialog from "./CreateUserDialog";
 import CreationResultDialog from "./CreationResultDialog";
 import PasswordResetResultDialog from "./PasswordResetResultDialog";
+import StaffAvailabilityDialog, { type AvailabilityConfirmResult } from "./StaffAvailabilityDialog";
+import type { StaffAvailability } from "@/shared/types/user";
 import Toast from "./Toast";
 
 type RoleFilter = "all" | Role;
@@ -27,6 +30,7 @@ function userDetailsText(user: AdminUserRow): string {
     `Phone: ${user.phone ?? "—"}`,
     `Role: ${ADMIN_USER_ROLE_LABEL[user.role]}`,
     `Status: ${ADMIN_USER_STATUS_LABEL[user.status]}`,
+    ...(user.availability ? [`Availability: ${STAFF_AVAILABILITY_LABEL[user.availability]}`] : []),
     `Created: ${formatDateTime(user.createdAt)}`,
     `Last login: ${user.lastLoginAt ? formatDateTime(user.lastLoginAt) : "Never"}`,
   ].join("\n");
@@ -47,6 +51,7 @@ export default function UserManagementView({
   initialUsers: AdminUserRow[];
   currentUserId: string;
 }) {
+  const router = useRouter();
   const [users, setUsers] = useState<AdminUserRow[]>(initialUsers);
   const [q, setQ] = useState("");
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
@@ -57,6 +62,7 @@ export default function UserManagementView({
   const [editOpen, setEditOpen] = useState(false);
   const [roleOpen, setRoleOpen] = useState(false);
   const [blockOpen, setBlockOpen] = useState(false);
+  const [availabilityOpen, setAvailabilityOpen] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [createdUser, setCreatedUser] = useState<CreatedAdminUser | null>(null);
@@ -99,6 +105,12 @@ export default function UserManagementView({
         break;
       case "password":
         setPasswordOpen(true);
+        break;
+      case "availability":
+        setAvailabilityOpen(true);
+        break;
+      case "handovers":
+        router.push(`/admin/staff/${user.id}/handover`);
         break;
       case "copy":
         navigator.clipboard
@@ -172,6 +184,31 @@ export default function UserManagementView({
     return result;
   };
 
+  const handleAvailabilityConfirm = async (
+    availability: StaffAvailability,
+    reason: string,
+  ): Promise<AvailabilityConfirmResult> => {
+    if (!activeUser) return { ok: false, errors: ["No user selected."] };
+    const response = await fetch(`/api/admin/users/${activeUser.id}/availability`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ availability, reason: reason || undefined }),
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok || !data?.ok) {
+      return { ok: false, errors: data?.errors ?? ["Something went wrong. Try again."] };
+    }
+    updateUser(activeUser.id, { availability });
+    setAvailabilityOpen(false);
+    const affected = (data.affectedAssignmentIds as string[]).length;
+    setToastMessage(
+      affected > 0
+        ? `${activeUser.name} is now ${STAFF_AVAILABILITY_LABEL[availability].toLowerCase()}. ${affected} assignment${affected === 1 ? "" : "s"} marked for handover.`
+        : `${activeUser.name} is now ${STAFF_AVAILABILITY_LABEL[availability].toLowerCase()}.`,
+    );
+    return { ok: true, affectedAssignmentIds: data.affectedAssignmentIds };
+  };
+
   const handlePasswordResetConfirm = async (): Promise<ActionResult> => {
     if (!activeUser) return { ok: false, errors: ["No user selected."] };
     const response = await fetch(`/api/admin/users/${activeUser.id}/reset-password`, { method: "POST" });
@@ -242,6 +279,13 @@ export default function UserManagementView({
         confirmLabel="Reset password"
         destructive
         onConfirm={handlePasswordResetConfirm}
+      />
+
+      <StaffAvailabilityDialog
+        open={availabilityOpen}
+        onClose={() => setAvailabilityOpen(false)}
+        user={activeUser}
+        onConfirm={handleAvailabilityConfirm}
       />
 
       <CreateUserDialog

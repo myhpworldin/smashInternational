@@ -37,7 +37,7 @@ const AUTH_ENTRY_PATHS = new Set(["/login", "/signup", "/verify-email"]);
 // current route's server-rendered payload — a real request, through the
 // same middleware and requireRole/blockIfPasswordChangeRequired checks
 // every other load goes through — without a full page reload.
-const PROTECTED_PREFIXES = ["/admin", "/dashboard", "/onboarding", "/force-password-change"];
+const PROTECTED_PREFIXES = ["/admin", "/staff", "/dashboard", "/onboarding", "/force-password-change"];
 
 function isProtectedPath(pathname: string): boolean {
   return PROTECTED_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));

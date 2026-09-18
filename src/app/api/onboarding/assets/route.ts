@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ObjectId } from "mongodb";
 import { assetMetadataSchema } from "@/shared/validation/onboarding";
 import { ASSET_TYPES, MAX_ASSET_SIZE_BYTES, isAllowedAssetMime } from "@/shared/types/onboarding";
-import { resolveOnboardingIdentity, addAsset, listAssets } from "@/server/services/onboarding.service";
+import { resolveOnboardingIdentity, addAsset, listAssets, reorderAssets } from "@/server/services/onboarding.service";
 
 export const runtime = "nodejs";
 
@@ -71,6 +72,37 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, asset }, { status: 201 });
   } catch (error) {
     console.error("[onboarding/assets/POST] failed:", error);
+    return NextResponse.json(GENERIC_ERROR, { status: 500 });
+  }
+}
+
+// Reorders this onboarding's asset list — body is the full new order as
+// asset ids, not a single moved item, keeping the client the source of
+// truth for the resulting sequence rather than the server having to infer
+// intent from a partial "move X before Y" instruction.
+export async function PATCH(request: NextRequest) {
+  const body = await request.json().catch(() => null);
+  const assetIds = body?.assetIds;
+
+  if (!Array.isArray(assetIds) || assetIds.some((id) => typeof id !== "string" || !ObjectId.isValid(id))) {
+    return NextResponse.json({ ok: false, message: "Invalid asset id list." }, { status: 400 });
+  }
+
+  try {
+    const { doc } = await resolveOnboardingIdentity();
+    const result = await reorderAssets(
+      doc._id,
+      doc.clientId,
+      assetIds.map((id) => new ObjectId(id)),
+    );
+
+    if (!result.ok) {
+      return NextResponse.json({ ok: false, errors: result.errors }, { status: 409 });
+    }
+
+    return NextResponse.json({ ok: true }, { status: 200 });
+  } catch (error) {
+    console.error("[onboarding/assets/PATCH] failed:", error);
     return NextResponse.json(GENERIC_ERROR, { status: 500 });
   }
 }

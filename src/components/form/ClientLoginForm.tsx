@@ -11,7 +11,6 @@ import { useLoginStore } from "@/store/useLoginStore";
 import { sendLoginOtp, verifyLoginOtp } from "@/lib/otp/loginTransport";
 import { resendSignupOtp } from "@/lib/otp/signupTransport";
 import { identifierError } from "@/lib/form/identifier";
-import { writeMockClientSession } from "@/lib/mock/clientSession";
 import { determineClientDestination } from "@/lib/routing/clientDestination";
 import ChangePasswordModal from "@/components/auth/ChangePasswordModal";
 
@@ -90,8 +89,8 @@ export default function ClientLoginForm() {
     }
 
     if (result.role === "admin") router.push("/admin");
+    else if (result.role === "staff") router.push("/staff");
     else if (result.role === "client") {
-      writeMockClientSession({ role: "client" });
       router.push(await determineClientDestination());
     }
   };
@@ -133,8 +132,9 @@ export default function ClientLoginForm() {
       setOtpPhase("success");
       if (result.role === "admin") {
         setTimeout(() => router.push("/admin"), 600);
+      } else if (result.role === "staff") {
+        setTimeout(() => router.push("/staff"), 600);
       } else {
-        writeMockClientSession({ role: "client" });
         setTimeout(() => {
           determineClientDestination().then((destination) => router.push(destination));
         }, 600);
@@ -165,7 +165,7 @@ export default function ClientLoginForm() {
   };
 
   if (forcedPasswordChangeRequired) {
-    return <ChangePasswordModal />;
+    return <ChangePasswordModal email={identifier.trim()} />;
   }
 
   return (

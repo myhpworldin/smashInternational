@@ -19,7 +19,7 @@ export async function GET(
     return NextResponse.json({ ok: false, message: "Invalid id." }, { status: 400 });
   }
 
-  const onboarding = await getForAdmin(new ObjectId(id));
+  const onboarding = await getForAdmin(new ObjectId(id), admin._id);
   if (!onboarding) {
     return NextResponse.json({ ok: false }, { status: 404 });
   }

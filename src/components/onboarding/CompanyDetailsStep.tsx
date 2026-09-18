@@ -8,13 +8,21 @@ import { companySchema, type CompanyInput } from "@/shared/validation/onboarding
 import { issuesToFieldErrors } from "@/lib/form/zodErrors";
 import { useFieldRegistry } from "@/lib/form/useFieldRegistry";
 import ValidationSummary from "@/components/form/ValidationSummary";
+import SaveStatusIndicator from "@/components/form/SaveStatusIndicator";
+import type { SaveStatus } from "@/store/useOnboardingDraftStore";
+import { readSectionCacheIfNewer } from "@/lib/onboarding/draftCache";
+import { useDraftCacheSync } from "@/lib/onboarding/useDraftCacheSync";
+import { useOpportunisticAutosave } from "@/lib/onboarding/useOpportunisticAutosave";
 
 type CompanyDetailsStepProps = {
   initialValue: Partial<CompanyInput> | null;
   onNext: (value: CompanyInput) => Promise<void>;
   onBack: () => void;
   saving: boolean;
+  saveStatus: SaveStatus;
   saveMessage: string | null;
+  onboardingId: string;
+  serverUpdatedAt: string;
 };
 
 type FormState = {
@@ -78,12 +86,22 @@ export default function CompanyDetailsStep({
   onNext,
   onBack,
   saving,
+  saveStatus,
   saveMessage,
+  onboardingId,
+  serverUpdatedAt,
 }: CompanyDetailsStepProps) {
-  const [form, setForm] = useState<FormState>(toFormState(initialValue));
+  const [form, setForm] = useState<FormState>(() => {
+    const cached = readSectionCacheIfNewer<FormState>(onboardingId, "company", serverUpdatedAt);
+    return cached ?? toFormState(initialValue);
+  });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [attempt, setAttempt] = useState(0);
   const { register, focusFirst } = useFieldRegistry();
+
+  useDraftCacheSync(onboardingId, "company", form);
+  const validForAutosave = companySchema.safeParse(form);
+  useOpportunisticAutosave(onboardingId, validForAutosave.success ? { company: validForAutosave.data } : null);
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -243,10 +261,12 @@ export default function CompanyDetailsStep({
         placeholder="Same as phone, or a different number"
       />
 
-      {saveMessage && (
+      {saveMessage ? (
         <p role="alert" className="font-body text-xs text-smash-text">
           {saveMessage}
         </p>
+      ) : (
+        <SaveStatusIndicator status={saveStatus} />
       )}
 
       <ValidationSummary

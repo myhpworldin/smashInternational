@@ -11,6 +11,11 @@ function companyName(doc: OnboardingDoc): string {
   return company?.name ?? "(no company name yet)";
 }
 
+function companyEmail(doc: OnboardingDoc): string {
+  const company = doc.company as { email?: string } | null;
+  return company?.email ?? "—";
+}
+
 function servicesLabel(doc: OnboardingDoc): string {
   if (doc.selectedServiceIds.length === 0) return "None";
   const labels = doc.selectedServiceIds.map((id) => getServiceById(id)?.label ?? id);
@@ -33,6 +38,7 @@ export default function OnboardingTable({ records }: { records: OnboardingDoc[] 
           <thead>
             <tr className="border-b border-carbon text-left text-xs tracking-[0.1em] text-ash uppercase">
               <th className="py-2 pr-4">Company</th>
+              <th className="py-2 pr-4">Email</th>
               <th className="py-2 pr-4">Status</th>
               <th className="py-2 pr-4">Submitted</th>
               <th className="py-2 pr-4">Services</th>
@@ -45,6 +51,7 @@ export default function OnboardingTable({ records }: { records: OnboardingDoc[] 
             {records.map((doc) => (
               <tr key={doc._id.toHexString()} className="border-b border-carbon/60 text-bone">
                 <td className="py-3 pr-4">{companyName(doc)}</td>
+                <td className="py-3 pr-4">{companyEmail(doc)}</td>
                 <td className="py-3 pr-4">
                   <span className="border border-carbon bg-carbon px-2 py-1 text-xs text-bone uppercase">
                     {ONBOARDING_ADMIN_LABEL[doc.status]}
@@ -77,6 +84,7 @@ export default function OnboardingTable({ records }: { records: OnboardingDoc[] 
                 {ONBOARDING_ADMIN_LABEL[doc.status]}
               </span>
             </div>
+            <p className="font-body text-xs text-ash">{companyEmail(doc)}</p>
             <p className="font-body text-sm text-bone">{servicesLabel(doc)}</p>
             <div className="flex items-center justify-between font-body text-xs text-ash">
               <span>{doc.submittedAt ? formatDateTime(doc.submittedAt) : "Not submitted"}</span>

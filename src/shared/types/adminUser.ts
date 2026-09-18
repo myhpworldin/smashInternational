@@ -1,4 +1,15 @@
-import type { Role } from "@/shared/types/user";
+import type { Role, StaffAvailability } from "@/shared/types/user";
+
+export type { StaffAvailability };
+
+export const STAFF_AVAILABILITY_VALUES: StaffAvailability[] = ["available", "on_leave", "unavailable", "departed"];
+
+export const STAFF_AVAILABILITY_LABEL: Record<StaffAvailability, string> = {
+  available: "Available",
+  on_leave: "On Leave",
+  unavailable: "Unavailable",
+  departed: "Departed",
+};
 
 // Frontend-foundation shape for Phase 2 (UI only). Mirrors the fields the
 // Phase 1 audit identified as needed on the real `users` collection —
@@ -14,6 +25,8 @@ export type AdminUserRow = {
   phone: string | null;
   role: Role;
   status: AdminUserStatus;
+  // Only ever set for role: "staff" — undefined for admin/client rows.
+  availability?: StaffAvailability;
   emailVerified: boolean;
   mustChangePassword: boolean;
   createdAt: Date;
@@ -23,6 +36,7 @@ export type AdminUserRow = {
 export const ADMIN_USER_ROLE_LABEL: Record<Role, string> = {
   admin: "Admin",
   client: "Client",
+  staff: "Staff",
 };
 
 export const ADMIN_USER_STATUS_LABEL: Record<AdminUserStatus, string> = {

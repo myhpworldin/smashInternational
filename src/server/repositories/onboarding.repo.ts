@@ -207,6 +207,19 @@ export async function listForAdmin(
   return { records, total };
 }
 
+// Company-name lookup for the handover history search (Phase 5 §15) —
+// resolves a free-text query to the onboarding ids it matches so the
+// caller can filter another collection (assignmentHandovers has no
+// company name of its own to search) without loading unbounded records
+// into the browser to filter client-side.
+export async function searchIdsByCompanyName(q: string): Promise<ObjectId[]> {
+  const trimmed = q.trim();
+  if (!trimmed) return [];
+  const regex = new RegExp(escapeRegex(trimmed), "i");
+  const docs = await (await collection()).find({ "company.name": regex }, { projection: { _id: 1 } }).toArray();
+  return docs.map((d) => d._id);
+}
+
 // One aggregation instead of one countDocuments per status — used by the
 // admin dashboard overview.
 export async function countByStatus(): Promise<Record<string, number>> {

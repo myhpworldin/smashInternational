@@ -38,6 +38,12 @@ export default async function AdminDashboardPage() {
         >
           Manage users
         </Link>
+        <Link
+          href="/admin/data-entry"
+          className="rounded-none border border-white/15 bg-carbon px-[18px] py-[14px] font-body text-sm text-bone hover:border-white/30 focus-visible:-outline-offset-2"
+        >
+          Daily data entry
+        </Link>
       </div>
     </main>
   );

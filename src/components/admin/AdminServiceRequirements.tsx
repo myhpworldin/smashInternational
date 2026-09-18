@@ -42,18 +42,51 @@ export default function AdminServiceRequirements({
         const service = getServiceById(id);
         if (!service) return null;
         const responses = responsesByService.get(id) ?? {};
+        const scalarFields = service.fields.filter((f) => f.type !== "groupList");
+        const groupListFields = service.fields.filter((f) => f.type === "groupList");
 
         return (
-          <div key={id} className="flex flex-col gap-2 border border-white/15 p-4">
+          <div key={id} className="flex flex-col gap-3 border border-white/15 p-4">
             <h3 className="font-body text-xs tracking-[0.14em] text-ash uppercase">{service.label}</h3>
-            <dl className="grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2">
-              {service.fields.map((field) => (
-                <div key={field.key} className="flex flex-col">
-                  <dt className="font-body text-xs text-ash">{field.label}</dt>
-                  <dd className="font-body text-sm text-bone">{formatValue(field, responses[field.key])}</dd>
+            {scalarFields.length > 0 && (
+              <dl className="grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2">
+                {scalarFields.map((field) => (
+                  <div key={field.key} className="flex flex-col">
+                    <dt className="font-body text-xs text-ash">{field.label}</dt>
+                    <dd className="font-body text-sm text-bone">{formatValue(field, responses[field.key])}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+            {groupListFields.map((field) => {
+              const rawEntries = responses[field.key];
+              const entries = Array.isArray(rawEntries) ? (rawEntries as Record<string, unknown>[]) : [];
+
+              return (
+                <div key={field.key} className="flex flex-col gap-2">
+                  <p className="font-body text-xs tracking-[0.14em] text-ash uppercase">{field.label}</p>
+                  {entries.length === 0 ? (
+                    <p className="font-body text-sm text-bone">Not provided</p>
+                  ) : (
+                    entries.map((groupEntry, index) => (
+                      <dl
+                        key={index}
+                        className="grid grid-cols-1 gap-x-4 gap-y-1 border border-white/10 p-3 sm:grid-cols-2"
+                      >
+                        {(field.groupFields ?? []).map((subField) => (
+                          <div key={subField.key} className="flex flex-col">
+                            <dt className="font-body text-xs text-ash">{subField.label}</dt>
+                            <dd className="font-body text-sm text-bone">
+                              {formatValue(subField, groupEntry[subField.key])}
+                            </dd>
+                          </div>
+                        ))}
+                      </dl>
+                    ))
+                  )}
                 </div>
-              ))}
-            </dl>
+              );
+            })}
           </div>
         );
       })}

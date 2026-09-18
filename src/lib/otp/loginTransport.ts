@@ -1,3 +1,5 @@
+import type { Role } from "@/shared/types/user";
+
 // Real transport for login's email OTP — mirrors
 // src/lib/otp/signupTransport.ts's shape so ClientLoginForm's OTP state
 // machine needed no changes beyond swapping the import away from
@@ -5,7 +7,7 @@
 // model (UserDoc has no phone field) — this only covers email.
 export type SendOtpResult = { ok: true } | { ok: false; reason: "network" };
 export type VerifyOtpResult =
-  | { ok: true; role: "admin" | "client"; mustChangePassword: boolean }
+  | { ok: true; role: Role; mustChangePassword: boolean }
   | { ok: false; reason: "invalid" | "network" };
 
 export async function sendLoginOtp(email: string): Promise<SendOtpResult> {

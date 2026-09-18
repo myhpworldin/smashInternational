@@ -2,6 +2,7 @@ import { getServiceById } from "@/shared/config/services";
 import { formatDateTime } from "@/lib/format/date";
 import type { OnboardingStatus } from "@/shared/types/onboarding";
 import StatusIcon from "@/components/onboarding/StatusIcon";
+import SubmissionRedirectCountdown from "@/components/onboarding/SubmissionRedirectCountdown";
 
 type OnboardingStatusScreenProps = {
   status: OnboardingStatus;
@@ -9,6 +10,10 @@ type OnboardingStatusScreenProps = {
   selectedServiceIds: string[];
   companyName: string | null;
   reviewNotes: string | null;
+  /** True only for the render right after a real submission (Stage 1
+   *  Phase 2) — runs the one-time countdown into the client dashboard.
+   *  A later revisit to this same status screen never sets this. */
+  justSubmitted?: boolean;
 };
 
 const STATUS_COPY: Record<string, { heading: string; message: string; next: string }> = {
@@ -39,6 +44,7 @@ export default function OnboardingStatusScreen({
   selectedServiceIds,
   companyName,
   reviewNotes,
+  justSubmitted = false,
 }: OnboardingStatusScreenProps) {
   const copy = STATUS_COPY[status] ?? STATUS_COPY.submitted;
   const services = selectedServiceIds.map((id) => getServiceById(id)).filter((s) => s !== undefined);
@@ -59,6 +65,8 @@ export default function OnboardingStatusScreen({
       {status === "approved" && reviewNotes && (
         <p className="font-body text-sm text-bone">{reviewNotes}</p>
       )}
+
+      {justSubmitted && <SubmissionRedirectCountdown destination="/dashboard" />}
 
       <div className="mt-4 flex w-full flex-col gap-3 border border-carbon p-5 text-left">
         <p className="font-body text-xs tracking-[0.14em] text-ash uppercase">Summary</p>
