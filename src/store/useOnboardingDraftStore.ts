@@ -19,7 +19,11 @@ type SaveResult = { ok: true } | { ok: false; unauthorized: boolean; message: st
 type OnboardingDraftState = {
   saveStatus: SaveStatus;
   saveMessage: string | null;
-  saveDraft: (patch: Partial<OnboardingDraft>) => Promise<SaveResult>;
+  // `basePath` lets the same save action serve both the client's own
+  // onboarding ("/api/onboarding", the default) and the admin-assisted
+  // mode (see OnboardingApiContext) without a second store — the caller
+  // (OnboardingWizard) already knows which mode it's rendering in.
+  saveDraft: (patch: Partial<OnboardingDraft>, basePath?: string) => Promise<SaveResult>;
 };
 
 // Deliberately holds no draft data itself — a module-level store can't be
@@ -34,11 +38,11 @@ export const useOnboardingDraftStore = create<OnboardingDraftState>((set) => ({
   saveStatus: "idle",
   saveMessage: null,
 
-  saveDraft: async (patch) => {
+  saveDraft: async (patch, basePath = "/api/onboarding") => {
     set({ saveStatus: "saving", saveMessage: null });
 
     try {
-      const response = await fetch("/api/onboarding", {
+      const response = await fetch(basePath, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(patch),

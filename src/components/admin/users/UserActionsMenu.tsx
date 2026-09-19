@@ -15,7 +15,19 @@ export type UserAction =
   | "share"
   | "availability"
   | "handovers"
+  | "onboarding"
   | "delete";
+
+// Stage 1 Phase 29 — label reflects exactly where this client's real
+// onboarding record stands (same progress model resolveClientDestination
+// uses for login routing), so an admin never has to guess whether
+// clicking this starts a fresh draft or opens an existing submission.
+const ONBOARDING_ACTION_LABEL: Record<string, string> = {
+  not_started: "Fill Onboarding",
+  incomplete: "Continue Onboarding",
+  submitted: "View Submission",
+  approved: "View Submission",
+};
 
 const MENU_WIDTH_PX = 176; // w-44
 const VIEWPORT_MARGIN_PX = 8;
@@ -125,6 +137,9 @@ export default function UserActionsMenu({
     { action: "view", label: "View" },
     { action: "edit", label: "Edit" },
     { action: "role", label: "Change Role" },
+    ...(user.role === "client" && user.onboardingProgress
+      ? [{ action: "onboarding" as const, label: ONBOARDING_ACTION_LABEL[user.onboardingProgress] ?? "Fill Onboarding" }]
+      : []),
     ...(user.role === "staff"
       ? [
           { action: "availability" as const, label: "Manage Availability" },

@@ -4,6 +4,7 @@ import { ObjectId } from "mongodb";
 import * as onboardingRepo from "@/server/repositories/onboarding.repo";
 import * as assetsRepo from "@/server/repositories/onboarding-assets.repo";
 import * as usersRepo from "@/server/repositories/users.repo";
+import type { UserDoc } from "@/server/repositories/users.repo";
 import * as gridfs from "@/server/storage/gridfs";
 import { uploadSmashAsset, deleteSmashAsset } from "@/server/storage/cloudinary";
 import { notifyOnboardingSubmitted } from "@/server/notifications/onboarding-notifications";
@@ -127,6 +128,60 @@ export async function isAssistedOnboarding(): Promise<boolean> {
   return Boolean(user && user.role === "client" && user.createdBy);
 }
 
+// Stage 1 Phase 29 (admin-assisted onboarding) — the admin-side
+// counterpart of resolveOnboardingIdentity: "whose draft is this admin
+// request for," given an explicit target client (never the admin's own
+// session identity, which has no onboarding of its own). Reuses the exact
+// same record/status/validation the client's own onboarding uses — this
+// is deliberately not a second onboarding model, just a second way to
+// reach the same one. Idempotent and duplicate-safe by construction: a
+// client who already has an onboarding record (in ANY status — draft,
+// submitted, under_review, approved, changes_requested) always gets that
+// exact record back, never a new one; only a client who has genuinely
+// never touched onboarding gets a fresh draft created here.
+export async function resolveOnboardingForAdmin(
+  targetUserId: string,
+  admin: UserDoc,
+): Promise<ServiceResult<OnboardingDoc>> {
+  if (!ObjectId.isValid(targetUserId)) {
+    return { ok: false, errors: ["Client not found."] };
+  }
+
+  const target = await usersRepo.findById(targetUserId);
+  if (!target || target.role !== "client") {
+    return { ok: false, errors: ["Client not found."] };
+  }
+
+  if (target.clientId) {
+    const existing = await onboardingRepo.findByClientId(target.clientId);
+    if (existing) return { ok: true, data: existing };
+    // Linked but the record itself is gone (deleted out of band) — fall
+    // through and create a fresh one under the same clientId, same
+    // defensive handling as resolveOnboardingIdentity's own version of
+    // this gap.
+  }
+
+  const clientId = target.clientId ?? new ObjectId();
+  const created = await onboardingRepo.createForAdmin(clientId, generateAccessToken(), admin._id);
+  await usersRepo.setClientId(target._id, clientId);
+
+  // Visible on the admin onboarding detail page's transition log
+  // (getOnboardingStatusHistory) as the first entry — "an admin started
+  // this" is itself worth a permanent record, not just implied by
+  // createdByUserId being non-null on the document.
+  await statusHistoryRepo.record({
+    entityType: "onboarding",
+    entityId: created._id,
+    clientId,
+    previousStatus: null,
+    newStatus: "draft",
+    changedByUserId: admin._id,
+    changedByRole: "admin",
+  });
+
+  return { ok: true, data: created };
+}
+
 // The caller (API route) must have already verified onboardingId belongs
 // to this clientId's session — this function re-verifies via the repo's
 // { _id, clientId } filter regardless, so a mismatched id is a silent no-op,
@@ -171,7 +226,15 @@ export async function saveDraft(
     finalPatch = { ...patch, serviceResponses: survivingResponses };
   }
 
-  const updated = await onboardingRepo.updateDraft(onboardingId, clientId, finalPatch);
+  // Session-derived only (never anything the request body could claim) —
+  // whichever real session is making this exact call: a client editing
+  // their own draft, or an admin editing one on a client's behalf. Absent
+  // entirely for the anonymous, no-login flow, which has no session to
+  // attribute the edit to.
+  const session = await verifySession();
+  const editor = session ? { userId: new ObjectId(session.userId), role: session.role } : undefined;
+
+  const updated = await onboardingRepo.updateDraft(onboardingId, clientId, finalPatch, editor);
   if (!updated) {
     return { ok: false, errors: ["Onboarding record not found, or it is no longer editable."] };
   }
@@ -202,13 +265,21 @@ export async function submitDraft(
     return { ok: false, errors };
   }
 
+  // Session-derived actor only (never trust a request-supplied id): the
+  // caller (either onboarding submit route — client's own or the admin-
+  // assisted one) already confirmed a real session exists before reaching
+  // here. Fetched once, reused both to stamp lastEditedBy on the write
+  // below and to record the statusHistory transition after it.
+  const session = await verifySession();
+  const editor = session ? { userId: new ObjectId(session.userId), role: session.role } : undefined;
+
   // A single updateOne on one document, guarded by a status filter
   // (draft/changes_requested only) — atomic by construction, no multi-
   // document transaction needed: either this exact write applies (moving
   // status and submittedAt together) or it doesn't, and a concurrent
   // second attempt (double-click, retried timeout) simply doesn't match
   // the filter a second time, so it never creates a duplicate submission.
-  const submittedAt = await onboardingRepo.submit(onboardingId, clientId);
+  const submittedAt = await onboardingRepo.submit(onboardingId, clientId, editor);
   if (!submittedAt) {
     return { ok: false, errors: ["Onboarding record is not in a submittable state."] };
   }
@@ -217,10 +288,6 @@ export async function submitDraft(
   // (draft -> submitted) and a client resubmission after changes were
   // requested (changes_requested -> submitted) — doc.status, captured
   // before the write above, is whichever of those actually applied.
-  // Session-derived actor only (never trust a request-supplied id): the
-  // caller (the submit API route) already confirmed viaSession is true
-  // before reaching here, so a real session is guaranteed to exist.
-  const session = await verifySession();
   if (session) {
     await statusHistoryRepo.record({
       entityType: "onboarding",

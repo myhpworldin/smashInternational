@@ -17,10 +17,18 @@ import type { DashboardActivityItem } from "@/shared/types/dashboard";
 // the previous version silently treated every non-onboarding entry as a
 // service-engagement one, which happened to no-op harmlessly for
 // Phase 21's new "report" entries but was never actually correct).
-function describeOnboardingTransition(newStatus: string): string | null {
+// `changedByRole` distinguishes a client's own submission from one an
+// admin completed on their behalf (Stage 1 Phase 29) — the one place this
+// client-visible feed needs to say so explicitly (PDF §20: the client
+// should be told, in neutral wording, that SMASH completed this for
+// them), reusing the statusHistory entry's own existing changedByRole
+// field rather than a second flag anywhere.
+function describeOnboardingTransition(newStatus: string, changedByRole?: string): string | null {
   switch (newStatus) {
     case "submitted":
-      return "Onboarding submitted";
+      return changedByRole === "admin"
+        ? "Your onboarding was completed by the SMASH team and is now under review"
+        : "Onboarding submitted";
     case "under_review":
       return "Your onboarding is under review";
     case "approved":
@@ -102,7 +110,7 @@ export async function getClientEvents(clientId: ObjectId, limit: number): Promis
   for (const entry of entries) {
     switch (entry.entityType) {
       case "onboarding": {
-        const label = describeOnboardingTransition(entry.newStatus);
+        const label = describeOnboardingTransition(entry.newStatus, entry.changedByRole);
         if (label) items.push({ id: entry._id.toHexString(), label, occurredAt: entry.changedAt.toISOString(), href: "/dashboard/onboarding" });
         break;
       }

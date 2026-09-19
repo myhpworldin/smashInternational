@@ -16,7 +16,16 @@ export type AuditAction =
   | "assignments_marked_for_handover"
   | "handover_cancelled"
   | "service_assignment_created"
-  | "service_handover_completed";
+  | "service_handover_completed"
+  // Stage 1 Phase 29 (admin-assisted onboarding) — recorded once, at the
+  // moment an admin finishes an onboarding on a client's behalf, matching
+  // the granularity every other entry in this log already uses (a
+  // discrete, completed admin action, not a per-field edit). Draft
+  // creation/saves are covered instead by the onboarding record's own
+  // createdByUserId/lastEditedByUserId and by a real statusHistory entry
+  // (see resolveOnboardingForAdmin in onboarding.service.ts) — this log
+  // is for the one moment that matters most for accountability.
+  | "onboarding_assisted_submitted";
 
 export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
   user_created: "User Created",
@@ -33,6 +42,7 @@ export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
   handover_cancelled: "Handover Cancelled",
   service_assignment_created: "Service Assignment Created",
   service_handover_completed: "Service Handover Completed",
+  onboarding_assisted_submitted: "Onboarding Submitted (Admin-Assisted)",
 };
 
 export const AUDIT_ACTION_FILTERS: { id: AuditAction; label: string }[] = [
@@ -50,6 +60,7 @@ export const AUDIT_ACTION_FILTERS: { id: AuditAction; label: string }[] = [
   { id: "handover_cancelled", label: AUDIT_ACTION_LABEL.handover_cancelled },
   { id: "service_assignment_created", label: AUDIT_ACTION_LABEL.service_assignment_created },
   { id: "service_handover_completed", label: AUDIT_ACTION_LABEL.service_handover_completed },
+  { id: "onboarding_assisted_submitted", label: AUDIT_ACTION_LABEL.onboarding_assisted_submitted },
 ];
 
 // Row shape handed to the client components — dates travel as Date

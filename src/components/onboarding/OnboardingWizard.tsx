@@ -20,6 +20,7 @@ import BusinessObjectivesStep from "@/components/onboarding/BusinessObjectivesSt
 import TargetAudienceStep from "@/components/onboarding/TargetAudienceStep";
 import BudgetStep from "@/components/onboarding/BudgetStep";
 import SummaryStep from "@/components/onboarding/SummaryStep";
+import { OnboardingApiProvider } from "@/components/onboarding/OnboardingApiContext";
 
 const STEP_LABELS: Record<OnboardingStepId, string> = {
   services: "Services",
@@ -35,6 +36,8 @@ export default function OnboardingWizard({
   changesRequestedNotes,
   onboardingId,
   serverUpdatedAt,
+  apiBase = "/api/onboarding",
+  onSubmitRedirectPath = "/onboarding?submitted=1",
 }: {
   initialDraft: OnboardingDraft;
   changesRequestedNotes?: string | null;
@@ -47,6 +50,18 @@ export default function OnboardingWizard({
   // page was rendered — used only to tell a genuinely unsynced local cache
   // entry apart from a stale one that predates data the server already has.
   serverUpdatedAt: string;
+  // Stage 1 Phase 29 — "/api/onboarding" (default, session-derived) for
+  // the client's own wizard, or "/api/admin/users/<id>/onboarding" for the
+  // admin-assisted page. Every fetch this component and its descendants
+  // make goes through this one base path (see OnboardingApiContext for the
+  // descendants' side of it) — nothing else about the wizard changes.
+  apiBase?: string;
+  // Where a confirmed submission navigates to. Defaults to the client's
+  // own post-submit status screen; the admin-assisted page overrides this
+  // to the existing admin onboarding review page instead (there is no
+  // "/onboarding" status screen in an admin session — proxy.ts already
+  // redirects an admin visiting that path straight to /admin).
+  onSubmitRedirectPath?: string;
 }) {
   const router = useRouter();
   const saveStatus = useOnboardingDraftStore((s) => s.saveStatus);
@@ -101,7 +116,7 @@ export default function OnboardingWizard({
   };
 
   const handleSave = async (patch: Partial<OnboardingDraft>, nextStep: OnboardingStepId | "summary") => {
-    const result = await saveDraft(patch);
+    const result = await saveDraft(patch, apiBase);
     if (!result.ok) {
       if (result.unauthorized) {
         router.push("/login");
@@ -128,7 +143,7 @@ export default function OnboardingWizard({
     setSubmitError(null);
 
     try {
-      const response = await fetch("/api/onboarding/submit", { method: "POST" });
+      const response = await fetch(`${apiBase}/submit`, { method: "POST" });
 
       if (response.status === 401) {
         router.push("/login");
@@ -145,15 +160,11 @@ export default function OnboardingWizard({
         // intact and editable, exactly as if nothing had happened.
         submittedRef.current = true;
         clearAllDraftCache(onboardingId);
-        // Re-navigates to this same server component with the now-submitted
-        // status, which swaps in OnboardingStatusScreen — the single source
-        // of truth for "what does submitted look like" stays in one place
-        // rather than duplicating that screen here for the optimistic case.
-        // The ?submitted=1 marker (Stage 1 Phase 2) tells that screen this
-        // is the instant right after a real submission, so it's the one
-        // case that runs the dashboard countdown — a plain later revisit to
-        // /onboarding never carries this param, so it never re-fires.
-        router.replace("/onboarding?submitted=1");
+        // Re-navigates to wherever a confirmed submission goes — the
+        // client's own status screen (?submitted=1, Stage 1 Phase 2, which
+        // runs the dashboard countdown) by default, or the admin-assisted
+        // page's own redirect (see onSubmitRedirectPath).
+        router.replace(onSubmitRedirectPath);
         return;
       }
 
@@ -161,14 +172,14 @@ export default function OnboardingWizard({
       // first attempt actually succeeded — the record's status has already
       // moved past draft/changes_requested, so check the current status
       // before showing a scary error for what is, in fact, a success.
-      const current = await fetch("/api/onboarding")
+      const current = await fetch(apiBase)
         .then((r) => r.json())
         .catch(() => null);
 
       if (current?.ok && current.onboarding.status !== "draft" && current.onboarding.status !== "changes_requested") {
         submittedRef.current = true;
         clearAllDraftCache(onboardingId);
-        router.replace("/onboarding?submitted=1");
+        router.replace(onSubmitRedirectPath);
         return;
       }
 
@@ -181,6 +192,7 @@ export default function OnboardingWizard({
   };
 
   return (
+    <OnboardingApiProvider basePath={apiBase}>
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-6 py-10 md:px-0">
       {changesRequestedNotes && (
         <div className="border border-smash-dim p-4">
@@ -288,5 +300,6 @@ export default function OnboardingWizard({
         )}
       </StepTransition>
     </div>
+    </OnboardingApiProvider>
   );
 }

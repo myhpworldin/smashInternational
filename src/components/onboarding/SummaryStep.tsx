@@ -12,6 +12,7 @@ import { BUSINESS_OBJECTIVES, ASSET_TYPES, type AssetType } from "@/shared/types
 import { formatINR } from "@/lib/format/currency";
 import type { CompanyInput, ObjectivesInput, TargetAudienceInput, BudgetInput } from "@/shared/validation/onboarding";
 import ValidationSummary from "@/components/form/ValidationSummary";
+import { useOnboardingApiBase } from "@/components/onboarding/OnboardingApiContext";
 
 const STEP_LABELS: Record<OnboardingStepId, string> = {
   services: "Services",
@@ -39,15 +40,17 @@ export default function SummaryStep({
   submitting: boolean;
   submitError: string | null;
 }) {
+  const apiBase = useOnboardingApiBase();
   const [assets, setAssets] = useState<Asset[]>([]);
 
   useEffect(() => {
-    fetch("/api/onboarding/assets")
+    fetch(`${apiBase}/assets`)
       .then((res) => res.json())
       .then((data) => {
         if (data?.ok) setAssets(data.assets);
       })
       .catch(() => null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- apiBase is fixed for the life of one wizard mount, not reactive state
   }, []);
 
   const company = draft.company as Partial<CompanyInput> | null;

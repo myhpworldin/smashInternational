@@ -60,6 +60,12 @@ export default async function MyOnboardingPage() {
         action={<ClientStatusBadge label={ONBOARDING_CLIENT_LABEL[doc.status]} tone={STATUS_TONE[doc.status] ?? "neutral"} />}
       />
 
+      {doc.createdByUserId && (
+        <p className="font-body text-xs text-ash">
+          Your onboarding was completed with assistance from the SMASH team.
+        </p>
+      )}
+
       <ClientSection title="Status">
         <div className="flex flex-col gap-2 border border-carbon p-5">
           <p className="font-body text-sm text-bone">{STATUS_EXPLANATION[doc.status]}</p>

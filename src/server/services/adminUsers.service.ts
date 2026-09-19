@@ -3,6 +3,9 @@ import { ObjectId } from "mongodb";
 import { getMongoClient } from "@/server/db/mongo";
 import * as usersRepo from "@/server/repositories/users.repo";
 import type { UserDoc } from "@/server/repositories/users.repo";
+import * as onboardingRepo from "@/server/repositories/onboarding.repo";
+import type { OnboardingDoc } from "@/server/repositories/onboarding.repo";
+import { resolveOnboardingProgress } from "@/lib/routing/clientDestination";
 import * as auditLog from "@/server/repositories/auditLog.repo";
 import { hashPassword } from "@/server/auth/password";
 import { generateTempPassword } from "@/server/auth/tempPassword";
@@ -117,10 +120,21 @@ export async function createUserByAdmin(
   }
 }
 
-function toAdminUserRow(doc: UserDoc): AdminUserRow {
+// Public self-signup (signup.service.ts) only ever collects email/password
+// — UserDoc.name is only ever set by createByAdmin. A self-signed-up
+// client's onboarding "Company" step does collect a real person's name
+// (contactPerson, a required field of that step — see
+// shared/validation/onboarding.ts) — used below as a fallback display name
+// rather than showing every such client as a bare "(name not set)".
+function contactNameFromCompany(company: Record<string, unknown> | null | undefined): string | undefined {
+  const contactPerson = company?.contactPerson;
+  return typeof contactPerson === "string" && contactPerson.trim() ? contactPerson.trim() : undefined;
+}
+
+function toAdminUserRow(doc: UserDoc, onboarding?: OnboardingDoc): AdminUserRow {
   return {
     id: doc._id.toHexString(),
-    name: doc.name ?? "(name not set)",
+    name: doc.name ?? (onboarding ? contactNameFromCompany(onboarding.company) : undefined) ?? "(name not set)",
     email: doc.email,
     phone: doc.phone ?? null,
     role: doc.role,
@@ -133,17 +147,49 @@ function toAdminUserRow(doc: UserDoc): AdminUserRow {
     // "Never" for everyone is honest about that, rather than fabricating
     // a value.
     lastLoginAt: null,
+    // Stage 1 Phase 29 — reuses resolveClientDestination's own progress
+    // model exactly (not_started/incomplete/submitted/approved) so the
+    // admin's "Fill Onboarding" state agrees by construction with what
+    // login routing itself decides for this same client.
+    onboardingProgress:
+      doc.role === "client"
+        ? resolveOnboardingProgress(onboarding?.status ?? "draft", onboarding ?? { selectedServiceIds: [] })
+        : undefined,
+    onboardingId: doc.role === "client" ? (onboarding?._id.toHexString() ?? null) : undefined,
   };
 }
 
 export async function listUsersForAdmin(): Promise<AdminUserRow[]> {
   const docs = await usersRepo.listAll();
-  return docs.map(toAdminUserRow);
+
+  // One bulk onboarding lookup for every client row, rather than one query
+  // per row — this list is bounded (listAll's own cap), but there's no
+  // reason to pay N queries when one $in covers all of them. Feeds both
+  // the name fallback (toAdminUserRow) and each client's onboarding
+  // progress/id for the "Fill Onboarding" action.
+  const clientIds = docs
+    .filter((d): d is UserDoc & { clientId: ObjectId } => d.role === "client" && d.clientId !== null)
+    .map((d) => d.clientId);
+
+  const onboardingByClientId = new Map<string, OnboardingDoc>();
+  if (clientIds.length > 0) {
+    const records = await onboardingRepo.findByClientIds(clientIds);
+    for (const record of records) {
+      onboardingByClientId.set(record.clientId.toHexString(), record);
+    }
+  }
+
+  return docs.map((doc) =>
+    toAdminUserRow(doc, doc.clientId ? onboardingByClientId.get(doc.clientId.toHexString()) : undefined),
+  );
 }
 
 export async function getAdminUserById(id: string): Promise<AdminUserRow | null> {
   const doc = await usersRepo.findById(id);
-  return doc ? toAdminUserRow(doc) : null;
+  if (!doc) return null;
+
+  const onboarding = doc.role === "client" && doc.clientId ? await onboardingRepo.findByClientId(doc.clientId) : null;
+  return toAdminUserRow(doc, onboarding ?? undefined);
 }
 
 export type AssignableStaffOption = { id: string; name: string; email: string };

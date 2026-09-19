@@ -2,6 +2,7 @@ import "server-only";
 import { ObjectId } from "mongodb";
 import { getMongoClient } from "@/server/db/mongo";
 import type { OnboardingStatus, ReviewDecision } from "@/shared/types/onboarding";
+import type { Role } from "@/shared/types/user";
 
 const COLLECTION = "onboarding";
 
@@ -13,10 +14,23 @@ export type OnboardingDoc = {
   // The credential for the public, no-login onboarding flow — see
   // server/onboarding/access.ts. Unique per record.
   accessToken: string;
-  // Null for the no-login flow (there is no user account behind an
-  // anonymous visit) — only ever set if an admin-side creation path is
-  // added later.
+  // Null for the no-login flow and for a client's own self-service
+  // onboarding — set to the admin's user id only by createForAdmin below
+  // (Stage 1 Phase 29: admin-assisted onboarding). This doubles as the
+  // record's "submission mode" — never a separate stored field, since
+  // createdByUserId already says everything "was this admin-assisted"
+  // needs to (non-null = admin-assisted, null = client-initiated) without
+  // two fields that could theoretically disagree.
   createdByUserId: ObjectId | null;
+  // Who most recently wrote to this draft (a save or the final submit) and
+  // in what role — distinct from createdByUserId (who started the
+  // record): a client can keep editing a draft an admin started, and an
+  // admin can resume one a client started, so "who created it" and "who
+  // last touched it" can genuinely differ. Null until the first write
+  // ever made through an authenticated session (an anonymous visitor's
+  // own edits have no session to attribute them to).
+  lastEditedByUserId: ObjectId | null;
+  lastEditedByRole: Role | null;
   status: OnboardingStatus;
   company: Record<string, unknown> | null;
   objectives: Record<string, unknown> | null;
@@ -41,13 +55,15 @@ async function collection() {
   return client.db().collection<OnboardingDoc>(COLLECTION);
 }
 
-function emptyDoc(clientId: ObjectId, accessToken: string): OnboardingDoc {
+function emptyDoc(clientId: ObjectId, accessToken: string, createdByUserId: ObjectId | null = null): OnboardingDoc {
   const now = new Date();
   return {
     _id: new ObjectId(),
     clientId,
     accessToken,
-    createdByUserId: null,
+    createdByUserId,
+    lastEditedByUserId: null,
+    lastEditedByRole: null,
     status: "draft",
     company: null,
     objectives: null,
@@ -65,6 +81,15 @@ function emptyDoc(clientId: ObjectId, accessToken: string): OnboardingDoc {
 
 export async function findByClientId(clientId: ObjectId): Promise<OnboardingDoc | null> {
   return (await collection()).findOne({ clientId });
+}
+
+// Bulk counterpart of findByClientId, for a caller resolving many clients
+// at once (adminUsers.service.ts's user list uses this to fall back to a
+// client's onboarding contact name — see toAdminUserRow) rather than
+// issuing one query per row.
+export async function findByClientIds(clientIds: ObjectId[]): Promise<OnboardingDoc[]> {
+  if (clientIds.length === 0) return [];
+  return (await collection()).find({ clientId: { $in: clientIds } }).toArray();
 }
 
 export async function findByAccessToken(token: string): Promise<OnboardingDoc | null> {
@@ -101,6 +126,24 @@ export async function createAnonymous(accessToken: string): Promise<OnboardingDo
   }
 }
 
+// Stage 1 Phase 29: the admin-assisted counterpart of createAnonymous —
+// same empty-draft shape, but keyed by a fresh synthetic clientId the
+// caller (resolveOnboardingForAdmin in onboarding.service.ts) immediately
+// links onto the target client's user account via usersRepo.setClientId,
+// rather than a cookie. accessToken is still generated and stored (the
+// schema requires one, and it keeps this row structurally identical to
+// every other onboarding document) even though nothing ever reaches this
+// record through the anonymous cookie flow.
+export async function createForAdmin(
+  clientId: ObjectId,
+  accessToken: string,
+  createdByUserId: ObjectId,
+): Promise<OnboardingDoc> {
+  const doc = emptyDoc(clientId, accessToken, createdByUserId);
+  await (await collection()).insertOne(doc);
+  return doc;
+}
+
 export type DraftPatch = Partial<
   Pick<
     OnboardingDoc,
@@ -108,16 +151,29 @@ export type DraftPatch = Partial<
   >
 >;
 
+export type EditorActor = { userId: ObjectId; role: Role };
+
 // Only permitted while the record is still a draft or kicked back for
 // changes — a submitted/under_review/approved record is not editable here.
+// `editor` is omitted for the anonymous, no-login flow (there is no
+// session to attribute the edit to); when present (a logged-in client or
+// an admin acting on their behalf) it stamps lastEditedByUserId/Role so
+// the record always reflects who most recently touched it.
 export async function updateDraft(
   onboardingId: ObjectId,
   clientId: ObjectId,
   patch: DraftPatch,
+  editor?: EditorActor,
 ): Promise<boolean> {
   const result = await (await collection()).updateOne(
     { _id: onboardingId, clientId, status: { $in: ["draft", "changes_requested"] } },
-    { $set: { ...patch, updatedAt: new Date() } },
+    {
+      $set: {
+        ...patch,
+        updatedAt: new Date(),
+        ...(editor && { lastEditedByUserId: editor.userId, lastEditedByRole: editor.role }),
+      },
+    },
   );
   return result.modifiedCount > 0 || result.matchedCount > 0;
 }
@@ -126,11 +182,18 @@ export async function updateDraft(
 // a submittable state (already submitted, mismatched client, etc.) — the
 // caller uses that null-ness rather than a separately-generated timestamp
 // to decide whether the submission truly happened.
-export async function submit(onboardingId: ObjectId, clientId: ObjectId): Promise<Date | null> {
+export async function submit(onboardingId: ObjectId, clientId: ObjectId, editor?: EditorActor): Promise<Date | null> {
   const now = new Date();
   const result = await (await collection()).updateOne(
     { _id: onboardingId, clientId, status: { $in: ["draft", "changes_requested"] } },
-    { $set: { status: "submitted", submittedAt: now, updatedAt: now } },
+    {
+      $set: {
+        status: "submitted",
+        submittedAt: now,
+        updatedAt: now,
+        ...(editor && { lastEditedByUserId: editor.userId, lastEditedByRole: editor.role }),
+      },
+    },
   );
   return result.modifiedCount > 0 ? now : null;
 }

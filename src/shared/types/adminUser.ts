@@ -1,4 +1,5 @@
 import type { Role, StaffAvailability } from "@/shared/types/user";
+import type { OnboardingProgressState } from "@/lib/routing/clientDestination";
 
 export type { StaffAvailability };
 
@@ -31,6 +32,14 @@ export type AdminUserRow = {
   mustChangePassword: boolean;
   createdAt: Date;
   lastLoginAt: Date | null;
+  // Only ever set for role: "client" (Stage 1 Phase 29) — feeds the "Fill
+  // Onboarding"/"Continue Onboarding"/"View Submission" action in
+  // UserActionsMenu.tsx. Reuses the exact same progress model
+  // resolveClientDestination already uses for login routing, not a
+  // second one; onboardingId is null only when no record exists yet
+  // (not_started).
+  onboardingProgress?: OnboardingProgressState;
+  onboardingId?: string | null;
 };
 
 export const ADMIN_USER_ROLE_LABEL: Record<Role, string> = {

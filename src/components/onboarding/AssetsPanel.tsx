@@ -7,6 +7,7 @@ import {
   isAllowedAssetMime,
   type AssetType,
 } from "@/shared/types/onboarding";
+import { useOnboardingApiBase } from "@/components/onboarding/OnboardingApiContext";
 
 type Asset = {
   _id: string;
@@ -41,6 +42,7 @@ function formatSize(bytes: number): string {
 function uploadWithProgress(
   file: File,
   assetType: AssetType,
+  apiBase: string,
   onProgress: (percent: number) => void,
 ): Promise<{ ok: boolean; message?: string; asset?: Asset }> {
   return new Promise((resolve) => {
@@ -68,7 +70,7 @@ function uploadWithProgress(
 
     xhr.onerror = () => resolve({ ok: false, message: "Couldn't reach the server." });
 
-    xhr.open("POST", "/api/onboarding/assets");
+    xhr.open("POST", `${apiBase}/assets`);
     xhr.send(formData);
   });
 }
@@ -98,6 +100,7 @@ function AssetThumbnail({ asset }: { asset: Asset }) {
 }
 
 export default function AssetsPanel() {
+  const apiBase = useOnboardingApiBase();
   const [assets, setAssets] = useState<Asset[]>([]);
   const [assetType, setAssetType] = useState<AssetType>("logo");
   const [loading, setLoading] = useState(true);
@@ -107,7 +110,7 @@ export default function AssetsPanel() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/onboarding/assets")
+    fetch(`${apiBase}/assets`)
       .then((res) => res.json())
       .then((data) => {
         if (!cancelled && data?.ok) setAssets(data.assets);
@@ -118,6 +121,7 @@ export default function AssetsPanel() {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- apiBase is fixed for the life of one wizard mount, not reactive state
   }, []);
 
   const handleFileSelected = async (file: File | undefined) => {
@@ -141,7 +145,7 @@ export default function AssetsPanel() {
 
     setUploads((prev) => ({ ...prev, [uploadKey]: { fileName: file.name, progress: 0, error: null } }));
 
-    const result = await uploadWithProgress(file, assetType, (percent) =>
+    const result = await uploadWithProgress(file, assetType, apiBase, (percent) =>
       setUploads((prev) => ({ ...prev, [uploadKey]: { ...prev[uploadKey], progress: percent } })),
     );
 
@@ -164,7 +168,7 @@ export default function AssetsPanel() {
 
   const handleRemove = async (assetId: string) => {
     setAssets((prev) => prev.filter((a) => a._id !== assetId));
-    await fetch(`/api/onboarding/assets/${assetId}`, { method: "DELETE" }).catch(() => null);
+    await fetch(`${apiBase}/assets/${assetId}`, { method: "DELETE" }).catch(() => null);
   };
 
   // Reorders locally first (the control the user just used should react
@@ -182,7 +186,7 @@ export default function AssetsPanel() {
     setReorderError(null);
 
     try {
-      const response = await fetch("/api/onboarding/assets", {
+      const response = await fetch(`${apiBase}/assets`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ assetIds: reordered.map((a) => a._id) }),

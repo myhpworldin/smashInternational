@@ -117,6 +117,9 @@ export default function UserManagementView({
       case "handovers":
         router.push(`/admin/staff/${user.id}/handover`);
         break;
+      case "onboarding":
+        router.push(`/admin/users/${user.id}/onboarding`);
+        break;
       case "delete":
         setDeleteOpen(true);
         break;
@@ -334,6 +337,14 @@ export default function UserManagementView({
             mustChangePassword: true,
             createdAt: new Date(user.createdAt),
             lastLoginAt: null,
+            // A brand-new client has no onboarding record until the admin
+            // (or the client) actually starts one — matches what
+            // resolveOnboardingProgress itself derives for a client with
+            // nothing yet (Phase 29 §25's "Create Client → Fill Onboarding"
+            // shortcut needs this to show up immediately, not just after a
+            // refresh).
+            onboardingProgress: user.role === "client" ? "not_started" : undefined,
+            onboardingId: user.role === "client" ? null : undefined,
           };
           setUsers((prev) => [newRow, ...prev]);
           setCreateOpen(false);

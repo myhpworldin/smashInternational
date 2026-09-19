@@ -17,6 +17,7 @@ const AUDIT_ACTIONS = new Set<AuditAction>([
   "password_reset_by_admin",
   "password_changed_by_user",
   "forced_password_change_completed",
+  "onboarding_assisted_submitted",
 ]);
 
 function isAuditAction(value: string): value is AuditAction {
