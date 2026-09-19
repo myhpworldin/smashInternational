@@ -73,6 +73,44 @@ export async function setBudgetTotalForAdmin(
   return { ok: true, data: toSnapshot(doc) };
 }
 
+// Admin-side: set the total budget AND every per-service allocation in one
+// save (the per-service allocation editor added alongside setBudgetTotalForAdmin's
+// original total-only editor) — `allocations` is always the client's
+// complete current set of rows (one per live service engagement), so this
+// replaces the whole list rather than patching one entry at a time. The
+// "allocated can't exceed total" rule is enforced here too, not only by
+// the request schema, since this function has no other caller yet but
+// shouldn't rely on that staying true.
+export async function setBudgetAllocationsForAdmin(
+  clientId: ObjectId,
+  input: { total: number; allocations: { id: string; name: string; allocated: number }[] },
+  actorUserId: ObjectId,
+): Promise<ServiceResult<BudgetSnapshot>> {
+  if (Number.isNaN(input.total) || input.total < 0) {
+    return { ok: false, errors: ["Total budget must be a non-negative number."] };
+  }
+
+  for (const allocation of input.allocations) {
+    if (Number.isNaN(allocation.allocated) || allocation.allocated < 0) {
+      return { ok: false, errors: [`The amount for ${allocation.name} must be a non-negative number.`] };
+    }
+  }
+
+  const totalAllocated = input.allocations.reduce((sum, a) => sum + a.allocated, 0);
+  if (totalAllocated > input.total) {
+    return { ok: false, errors: ["Allocated amounts can't exceed the total budget."] };
+  }
+
+  const doc = await budgetsRepo.upsertTotal(clientId, budgetsRepo.currentPeriod(), input.total, actorUserId);
+  await budgetsRepo.replaceAllocations(doc._id, input.allocations);
+
+  // Guaranteed to exist — upsertTotal just created/confirmed this exact
+  // document and replaceAllocations wrote to that same _id immediately
+  // after, same non-null reasoning upsertTotal's own findOneAndUpdate uses.
+  const updated = await budgetsRepo.findByClientAndPeriod(clientId, budgetsRepo.currentPeriod().key);
+  return { ok: true, data: toSnapshot(updated!) };
+}
+
 // Client-side: submit a budget change request (Phase 18 §20, reused by
 // Phase 12's client-facing form). `currentAllocation` is always resolved
 // here from the client's real, current budget — never trusted from the

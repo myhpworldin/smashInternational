@@ -125,3 +125,33 @@ export async function setAllocationAmount(
 export async function setTotalAmount(budgetId: ObjectId, total: number, session?: ClientSession): Promise<void> {
   await (await collection()).updateOne({ _id: budgetId }, { $set: { total, updatedAt: new Date() } }, { session });
 }
+
+// Full replace of the allocations array — the admin per-service allocation
+// editor (setBudgetAllocationsForAdmin in budget.service.ts) always sends
+// the complete current list (one row per the client's live services), so
+// this is a single atomic write rather than N individual
+// setAllocationAmount calls, and correctly drops a row the admin removed
+// (a service no longer engaged) instead of leaving it stale. `spent` is
+// preserved by matching on `name` against whatever was there before —
+// this write only ever changes `allocated`, never actual spend.
+export async function replaceAllocations(
+  budgetId: ObjectId,
+  allocations: { id: string; name: string; allocated: number }[],
+  session?: ClientSession,
+): Promise<void> {
+  const existing = await (await collection()).findOne({ _id: budgetId }, { session });
+  const spentByName = new Map((existing?.allocations ?? []).map((a) => [a.name, a.spent]));
+
+  const next: BudgetAllocationEntry[] = allocations.map((a) => ({
+    id: a.id,
+    name: a.name,
+    allocated: a.allocated,
+    spent: spentByName.get(a.name) ?? 0,
+  }));
+
+  await (await collection()).updateOne(
+    { _id: budgetId },
+    { $set: { allocations: next, updatedAt: new Date() } },
+    { session },
+  );
+}

@@ -64,6 +64,26 @@ export async function saveBudgetSnapshot(input: unknown): Promise<AdminActionRes
   }
 }
 
+// Per-service allocation editor's write path, via POST
+// /api/admin/budget/allocations — sets the total and every per-service
+// allocation together, alongside the existing total-only saveBudgetSnapshot.
+export async function saveBudgetAllocations(input: unknown): Promise<AdminActionResult> {
+  try {
+    const response = await fetch("/api/admin/budget/allocations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok || !data?.ok) {
+      return { ok: false, errors: data?.errors ?? [data?.message ?? "Couldn't save this budget."] };
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false, errors: ["Couldn't reach the server. Check your connection and try again."] };
+  }
+}
+
 // Stage 1 Phase 13's per-client performance-entry form (AdminPerformanceEntryPanel)
 // and Phase 14's cross-client Daily Data Entry workspace both ultimately
 // save the same kind of record — Stage 1 Phase 23 wires this one to the

@@ -179,7 +179,11 @@ export default async function AdminOnboardingDetailPage({
       </Section>
 
       <Section title="Budget (actual spend)">
-        <AdminBudgetPanel clientId={doc.clientId.toHexString()} snapshot={budgetSnapshot} />
+        <AdminBudgetPanel
+          clientId={doc.clientId.toHexString()}
+          snapshot={budgetSnapshot}
+          services={engagedServiceOptions.map((s) => ({ id: s.id, label: s.label }))}
+        />
       </Section>
 
       <Section title="Budget requests">
