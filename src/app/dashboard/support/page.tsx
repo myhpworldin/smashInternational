@@ -45,7 +45,7 @@ export default async function SupportPage() {
       </ClientSection>
 
       <ClientSection title="Create a Ticket">
-        <SupportTicketForm serviceOptions={engagements.map((e) => e.serviceLabel)} />
+        <SupportTicketForm serviceOptions={engagements.map((e) => ({ id: e.serviceId, label: e.serviceLabel }))} />
       </ClientSection>
     </div>
   );

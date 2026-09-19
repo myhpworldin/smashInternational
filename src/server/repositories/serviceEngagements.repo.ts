@@ -84,6 +84,15 @@ export async function listByClientId(clientId: ObjectId): Promise<ServiceEngagem
   return (await collection()).find({ clientId }).sort({ createdAt: 1 }).toArray();
 }
 
+// Stage 1 Phase 28 §29/§30 — org-wide, for the admin handover dashboard's
+// "unassigned active services" tile: every currently-live engagement
+// across every client, cross-referenced there against
+// serviceAssignments.repo.ts's own findAllLive to find engagements with
+// no occupying assignment at all.
+export async function listAllLive(): Promise<ServiceEngagementDoc[]> {
+  return (await collection()).find({ status: { $in: [...LIVE_SERVICE_ENGAGEMENT_STATUSES] } }).toArray();
+}
+
 export async function listBySourceOnboardingId(onboardingId: ObjectId): Promise<ServiceEngagementDoc[]> {
   return (await collection()).find({ sourceOnboardingId: onboardingId }).toArray();
 }

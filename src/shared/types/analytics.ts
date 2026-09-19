@@ -66,6 +66,8 @@ export type CampaignAnalysisResult = {
   metrics: MetricTotals;
   derived: {
     costPerLead: number | null;
+    costPerClick: number | null;
+    costPerAcquisition: number | null;
     clickThroughRate: number | null;
     conversionRate: number | null;
   };

@@ -22,6 +22,7 @@ import AdminCampaignsPanel from "@/components/admin/AdminCampaignsPanel";
 import AdminBudgetPanel from "@/components/admin/AdminBudgetPanel";
 import AdminBudgetRequestsPanel from "@/components/admin/AdminBudgetRequestsPanel";
 import AdminPerformanceEntryPanel from "@/components/admin/AdminPerformanceEntryPanel";
+import { ACCOUNT_MANAGER_SLOT } from "@/shared/types/serviceAssignment";
 import type {
   CompanyInput,
   ObjectivesInput,
@@ -193,7 +194,15 @@ export default async function AdminOnboardingDetailPage({
         <AssignmentsPanel
           onboardingId={doc._id.toHexString()}
           companyName={company?.name ?? "(no company name yet)"}
-          services={services.map((s) => ({ id: s!.id, label: s!.label }))}
+          services={[
+            // Stage 1 Phase 28 §3A/§16 — the account-manager slot reuses
+            // this exact assign/reassign/handover UI unchanged; it's just
+            // one more entry in the same list, always shown first since
+            // the account manager is the client-wide relationship owner,
+            // not tied to any one selected service.
+            { id: ACCOUNT_MANAGER_SLOT, label: "Account Manager (client-wide)" },
+            ...services.map((s) => ({ id: s!.id, label: s!.label })),
+          ]}
           initialAssignments={assignments}
           assignableStaff={assignableStaff}
         />

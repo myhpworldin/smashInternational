@@ -34,11 +34,12 @@ export default async function StaffHandoversPage({
       <h1 className="font-display text-xl text-bone">User Management</h1>
       <UserManagementTabs active="handovers" />
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         <SummaryTile label="Pending Handovers" value={summary.pendingStaffCount} />
         <SummaryTile label="Affected Services" value={summary.affectedServiceCount} />
         <SummaryTile label="Affected Clients" value={summary.affectedClientCount} />
         <SummaryTile label="Completed Handovers" value={summary.completedHandoverCount} />
+        <SummaryTile label="Unassigned Services" value={summary.unassignedActiveServiceCount} />
       </div>
 
       <section className="flex flex-col gap-3 border-t border-white/15 pt-6">

@@ -293,7 +293,21 @@ export default function ServiceRequirementsStep({
     if (serviceErrors.length > 0 || !brandOk || saving) {
       if (serviceErrors.length > 0 || !brandOk) {
         setAttempt((a) => a + 1);
-        focusFirst(orderedFieldKeys);
+        // orderedFieldKeys lists every possible field regardless of
+        // whether it's actually invalid — focusFirst jumps to the first
+        // one that merely has a mounted node, so passing it unfiltered
+        // always landed on Brand story (the first key in the list)
+        // whenever *any* field anywhere failed, even when Brand story
+        // itself was perfectly valid. Filtering to only the keys that
+        // actually failed this attempt (mirroring every other onboarding
+        // step's focusFirst call) ensures the user is taken to a field
+        // that actually shows an error message.
+        const invalidKeys = orderedFieldKeys.filter((key) =>
+          key.startsWith("brand.")
+            ? Boolean(nextBrandErrors[key.slice("brand.".length)])
+            : serviceErrors.some((e) => e.startsWith(`${key}:`)),
+        );
+        focusFirst(invalidKeys);
       }
       return;
     }

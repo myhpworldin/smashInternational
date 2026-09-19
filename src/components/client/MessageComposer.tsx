@@ -1,15 +1,18 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { sendMessage } from "@/lib/client-actions/messages";
 
-// Stage 1 Phase 15 §18 — no optimistic message insertion: since there's
-// no backend to actually store a sent message yet, faking one appearing
-// in the thread would be indistinguishable from a real send and violate
-// the same "never claim persisted" rule as every other client-action
-// abstraction this session. The composer honestly reports the send
-// failed rather than pretending it worked.
+// Stage 1 Phase 15 §18, wired to a real backend Phase 23 — no optimistic
+// message insertion: the conversation thread above this composer is
+// rendered by its parent Server Component from real stored messages, so
+// a successful send calls `router.refresh()` (§25's cache-invalidation
+// pattern, same as every admin panel's post-save refresh this session)
+// to pull the just-sent message back from the database rather than
+// faking its appearance client-side.
 export default function MessageComposer({ conversationId }: { conversationId: string }) {
+  const router = useRouter();
   const [text, setText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,6 +35,7 @@ export default function MessageComposer({ conversationId }: { conversationId: st
       return;
     }
     setText("");
+    router.refresh();
   };
 
   return (

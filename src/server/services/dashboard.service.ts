@@ -8,6 +8,7 @@ import { getBudgetForClient } from "@/server/services/budget.service";
 import { listApprovalsForClient } from "@/server/services/approvals.service";
 import { listDeliverablesForClient } from "@/server/services/deliverables.service";
 import { getClientEvents } from "@/server/services/clientEvents.service";
+import { getAccountManagerNameForClient } from "@/server/services/serviceAssignments.service";
 import { getServiceById } from "@/shared/config/services";
 import { resolveAccountLifecycle, ACCOUNT_LIFECYCLE_LABEL } from "@/shared/types/dashboard";
 import type { DashboardData, DashboardActionItem } from "@/shared/types/dashboard";
@@ -47,12 +48,13 @@ export async function buildDashboardData(
   // empty in production until a backend exists for either — so this is
   // now genuinely `[]` (a data source that currently has nothing), not
   // `null` (no capability at all) as it was in Phase 7.
-  const [projects, campaigns, budgetSnapshot, approvals, deliverables] = await Promise.all([
+  const [projects, campaigns, budgetSnapshot, approvals, deliverables, accountManagerName] = await Promise.all([
     listProjectsForClient(doc.clientId),
     listCampaignsForClient(doc.clientId),
     getBudgetForClient(doc.clientId),
     listApprovalsForClient(doc.clientId),
     listDeliverablesForClient(doc.clientId),
+    getAccountManagerNameForClient(doc.clientId),
   ]);
   const pendingApprovalsCount = approvals.filter(
     (a) => a.status === "awaiting_client" || a.status === "updated" || a.status === "resubmitted",
@@ -114,5 +116,6 @@ export async function buildDashboardData(
     budgetSnapshot,
     pendingApprovalsCount,
     recentDeliverablesCount: deliverables.length,
+    accountManagerName,
   };
 }

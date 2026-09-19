@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { onboardingDraftSchema } from "@/shared/validation/onboarding";
-import { resolveOnboardingIdentity, saveDraft } from "@/server/services/onboarding.service";
+import { resolveOnboardingIdentity, saveDraft, isAssistedOnboarding } from "@/server/services/onboarding.service";
 
 export const runtime = "nodejs";
 
@@ -13,7 +13,8 @@ const GENERIC_ERROR = { ok: false, message: "Something went wrong. Try again sho
 export async function GET() {
   try {
     const { doc } = await resolveOnboardingIdentity();
-    return NextResponse.json({ ok: true, onboarding: doc }, { status: 200 });
+    const assistedBySmash = await isAssistedOnboarding();
+    return NextResponse.json({ ok: true, onboarding: doc, assistedBySmash }, { status: 200 });
   } catch (error) {
     console.error("[onboarding/GET] failed:", error);
     return NextResponse.json(GENERIC_ERROR, { status: 500 });

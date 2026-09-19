@@ -331,3 +331,13 @@ export async function countEligibleStaff(excludeStaffUserId: ObjectId): Promise<
     $or: [{ availability: "available" }, { availability: { $exists: false } }],
   });
 }
+
+// Hard delete — see deleteUser in adminUsers.service.ts for the safety
+// checks (never self, never the last admin) and the audit entry this
+// backs, both of which must run before this is ever called.
+export async function deleteById(
+  id: ObjectId,
+  session?: import("mongodb").ClientSession,
+): Promise<void> {
+  await (await collection()).deleteOne({ _id: id }, { session });
+}

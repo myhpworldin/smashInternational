@@ -1,7 +1,4 @@
 // Single source of truth for brand content. Runs on both server and client — no Node/browser APIs.
-//
-// PLACEHOLDER FIELDS — replace before launch:
-//   email
 
 export const site = {
   name: "Smash International",

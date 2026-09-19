@@ -102,4 +102,10 @@ export type DashboardData = {
   budgetSnapshot: BudgetSnapshot | null;
   pendingApprovalsCount: number;
   recentDeliverablesCount: number;
+  // Stage 1 Phase 28 §18 — the one client-safe fact about internal
+  // service-assignment continuity: who the client's current account
+  // manager is, by name only. `null` when none has been assigned yet —
+  // never a fabricated name, and never any detail about *why* it's the
+  // current person (no "replaced Rahul," no handover status).
+  accountManagerName: string | null;
 };

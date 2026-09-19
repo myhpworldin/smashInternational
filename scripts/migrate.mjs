@@ -79,6 +79,30 @@ async function main() {
     await db.collection("dailyPerformanceRecords").createIndex({ clientId: 1, serviceId: 1, reportingDate: 1 });
     await db.collection("dailyPerformanceRecords").createIndex({ campaignOrProjectId: 1, reportingDate: 1 });
 
+    // Stage 1 Phase 21 — reports. Not a unique index: duplicate-generation
+    // protection is enforced at the application level (an archived report
+    // intentionally frees its period for a fresh one — see
+    // reports.repo.ts's findActiveByNaturalKey).
+    await db.collection("reports").createIndex({ clientId: 1, reportType: 1, periodStart: 1, periodEnd: 1 });
+    await db.collection("reports").createIndex({ clientId: 1, status: 1 });
+
+    // Stage 1 Phase 22 — approvals, deliverables, communication, support,
+    // and client notifications.
+    await db.collection("approvals").createIndex({ clientId: 1, status: 1, submittedAt: -1 });
+    await db.collection("approvals").createIndex({ clientId: 1 });
+    await db.collection("deliverables").createIndex({ clientId: 1, updatedAt: -1 });
+    await db.collection("conversations").createIndex({ clientId: 1, lastMessageAt: -1 });
+    await db.collection("conversationMessages").createIndex({ conversationId: 1, createdAt: 1 });
+    await db.collection("supportTickets").createIndex({ clientId: 1, updatedAt: -1 });
+    await db.collection("supportTickets").createIndex({ clientId: 1, status: 1 });
+    await db.collection("clientNotifications").createIndex({ clientId: 1, createdAt: -1 });
+    await db.collection("clientNotifications").createIndex({ clientId: 1, isRead: 1 });
+    // Backs upsertForEvent's idempotency key (§23's duplicate-notification
+    // prevention).
+    await db
+      .collection("clientNotifications")
+      .createIndex({ clientId: 1, type: 1, entityType: 1, entityId: 1 }, { unique: true });
+
     console.log("Indexes created/verified.");
   } finally {
     await client.close();

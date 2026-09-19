@@ -62,6 +62,7 @@ export default function UserManagementView({
   const [editOpen, setEditOpen] = useState(false);
   const [roleOpen, setRoleOpen] = useState(false);
   const [blockOpen, setBlockOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [availabilityOpen, setAvailabilityOpen] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
@@ -85,6 +86,10 @@ export default function UserManagementView({
 
   const updateUser = (id: string, updates: Partial<AdminUserRow>) => {
     setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, ...updates } : u)));
+  };
+
+  const removeUser = (id: string) => {
+    setUsers((prev) => prev.filter((u) => u.id !== id));
   };
 
   const handleAction = (user: AdminUserRow, action: UserAction) => {
@@ -111,6 +116,9 @@ export default function UserManagementView({
         break;
       case "handovers":
         router.push(`/admin/staff/${user.id}/handover`);
+        break;
+      case "delete":
+        setDeleteOpen(true);
         break;
       case "copy":
         navigator.clipboard
@@ -180,6 +188,19 @@ export default function UserManagementView({
       updateUser(activeUser.id, { status: nextStatus });
       setBlockOpen(false);
       setToastMessage(`${activeUser.name} is now ${ADMIN_USER_STATUS_LABEL[nextStatus].toLowerCase()}.`);
+    }
+    return result;
+  };
+
+  const handleDeleteConfirm = async (): Promise<ActionResult> => {
+    if (!activeUser) return { ok: false, errors: ["No user selected."] };
+    const response = await fetch(`/api/admin/users/${activeUser.id}`, { method: "DELETE" });
+    const result = await parseMutationResponse(response);
+    if (result.ok) {
+      const deletedName = activeUser.name;
+      removeUser(activeUser.id);
+      setDeleteOpen(false);
+      setToastMessage(`Deleted ${deletedName}.`);
     }
     return result;
   };
@@ -269,6 +290,16 @@ export default function UserManagementView({
         confirmLabel={activeUser?.status === "blocked" ? "Unblock" : "Block user"}
         destructive={activeUser?.status !== "blocked"}
         onConfirm={handleBlockConfirm}
+      />
+
+      <ConfirmActionDialog
+        open={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        title="Delete user"
+        description={`${activeUser?.name} will be permanently removed. This can't be undone.`}
+        confirmLabel="Delete user"
+        destructive
+        onConfirm={handleDeleteConfirm}
       />
 
       <ConfirmActionDialog

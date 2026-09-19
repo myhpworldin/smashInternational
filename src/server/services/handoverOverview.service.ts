@@ -5,6 +5,7 @@ import * as handoversRepo from "@/server/repositories/assignmentHandovers.repo";
 import * as usersRepo from "@/server/repositories/users.repo";
 import type { UserDoc } from "@/server/repositories/users.repo";
 import * as onboardingRepo from "@/server/repositories/onboarding.repo";
+import * as serviceEngagementsRepo from "@/server/repositories/serviceEngagements.repo";
 import { getServiceById } from "@/shared/config/services";
 import type {
   PendingHandoverStaffRow,
@@ -19,12 +20,28 @@ function displayName(user: Pick<UserDoc, "name" | "email">): string {
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 100;
 
+// Stage 1 Phase 28 §29/§30 — every currently-live service engagement
+// across every client that has no occupying assignment at all (not even
+// one stuck mid-handover) — a genuinely different question from
+// "handover pending," which only ever counts services that WERE assigned
+// and then lost their owner. A service selected at onboarding and never
+// assigned to anyone yet falls only into this count.
+async function countUnassignedActiveServices(): Promise<number> {
+  const [engagements, liveAssignments] = await Promise.all([
+    serviceEngagementsRepo.listAllLive(),
+    assignmentsRepo.findAllLive(),
+  ]);
+  const assignedSlots = new Set(liveAssignments.map((a) => `${a.clientId.toHexString()}:${a.serviceId}`));
+  return engagements.filter((e) => !assignedSlots.has(`${e.clientId.toHexString()}:${e.serviceId}`)).length;
+}
+
 // The handover dashboard's real, backend-derived numbers (Phase 5 §4) —
 // every figure here comes from an actual query, never a placeholder.
 export async function getHandoverSummary(): Promise<HandoverSummary> {
-  const [pending, completedCount] = await Promise.all([
+  const [pending, completedCount, unassignedActiveServiceCount] = await Promise.all([
     assignmentsRepo.findAllHandoverRequired(),
     handoversRepo.countAllCompleted(),
+    countUnassignedActiveServices(),
   ]);
 
   return {
@@ -33,6 +50,7 @@ export async function getHandoverSummary(): Promise<HandoverSummary> {
     affectedServiceCount: new Set(pending.map((a) => a.serviceId)).size,
     affectedClientCount: new Set(pending.map((a) => a.onboardingId.toHexString())).size,
     completedHandoverCount: completedCount,
+    unassignedActiveServiceCount,
   };
 }
 

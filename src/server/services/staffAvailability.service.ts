@@ -1,6 +1,7 @@
 import "server-only";
 import { ObjectId, type ClientSession } from "mongodb";
 import { getMongoClient } from "@/server/db/mongo";
+import { runWithOptionalTransaction } from "@/server/db/transaction";
 import * as usersRepo from "@/server/repositories/users.repo";
 import type { UserDoc } from "@/server/repositories/users.repo";
 import * as assignmentsRepo from "@/server/repositories/serviceAssignments.repo";
@@ -37,7 +38,10 @@ export async function cascadeAvailabilityChange(
   actor: UserDoc,
   availability: StaffAvailability,
   reason: string | null,
-  session: ClientSession,
+  // `undefined` when runWithOptionalTransaction (src/server/db/transaction.ts)
+  // has fallen back to a non-transactional write because the connected
+  // deployment doesn't support transactions at all (a standalone mongod).
+  session: ClientSession | undefined,
 ): Promise<ObjectId[]> {
   await usersRepo.setAvailability(target._id, availability, session);
 
@@ -145,16 +149,11 @@ export async function setStaffAvailability(
   if (current === availability) return { ok: true, affectedAssignmentIds: [] };
 
   const client = await getMongoClient();
-  const session = client.startSession();
   let affectedAssignmentIds: ObjectId[] = [];
 
-  try {
-    await session.withTransaction(async () => {
-      affectedAssignmentIds = await cascadeAvailabilityChange(target, actor, availability, reason, session);
-    });
-  } finally {
-    await session.endSession();
-  }
+  await runWithOptionalTransaction(client, async (session) => {
+    affectedAssignmentIds = await cascadeAvailabilityChange(target, actor, availability, reason, session);
+  });
 
   await recordAvailabilityCascadeAudit(target, actor, current, availability, reason, affectedAssignmentIds);
 

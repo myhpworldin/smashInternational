@@ -9,6 +9,8 @@ const VALID_PERIOD_KEYS: PeriodKey[] = [
   "previous_week",
   "current_month",
   "previous_month",
+  "current_quarter",
+  "previous_quarter",
   "custom",
 ];
 

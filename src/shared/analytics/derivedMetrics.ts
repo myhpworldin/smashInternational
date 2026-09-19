@@ -28,6 +28,20 @@ export function costPerLead(spend?: number | null, leads?: number | null): numbe
   return roundTo(safeDivide(spend, leads), 2);
 }
 
+export function costPerClick(spend?: number | null, clicks?: number | null): number | null {
+  return roundTo(safeDivide(spend, clicks), 2);
+}
+
+// Stage 1 Phase 21 §5/§6 — "cost per acquisition" needs a conversion
+// count as its denominator; this data model has no field separate from
+// `closedDeals` that represents a completed acquisition, so closedDeals
+// is the acquisition count CPA is calculated against here — documented
+// rather than left ambiguous, since a different definition would silently
+// change what every CPA figure means.
+export function costPerAcquisition(spend?: number | null, closedDeals?: number | null): number | null {
+  return roundTo(safeDivide(spend, closedDeals), 2);
+}
+
 export function clickThroughRate(clicks?: number | null, impressions?: number | null): number | null {
   return safePercent(clicks, impressions);
 }

@@ -51,6 +51,9 @@ export default async function ClientDashboardPage() {
           label="Monthly Budget"
           value={data.budget ? formatINR(data.budget.monthlyTotal) : undefined}
         />
+        {data.accountManagerName && (
+          <MetricCard label="Account Manager" value={data.accountManagerName} />
+        )}
       </div>
 
       {data.actions.length > 0 && (

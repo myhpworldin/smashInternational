@@ -71,6 +71,21 @@ export async function findLiveByOnboardingAndService(
   });
 }
 
+// Stage 1 Phase 28 — the account-manager slot is looked up by clientId
+// directly (this doc's own denormalized field) rather than by
+// onboardingId, since the client-safe reader (getAccountManagerForClient)
+// only ever has a session-derived clientId on hand, not an onboardingId.
+export async function findLiveByClientAndService(
+  clientId: ObjectId,
+  serviceId: string,
+): Promise<ServiceAssignmentDoc | null> {
+  return (await collection()).findOne({
+    clientId,
+    serviceId,
+    status: { $in: ["active", "handover_required", "handover_in_progress"] },
+  });
+}
+
 export async function listByOnboarding(onboardingId: ObjectId): Promise<ServiceAssignmentDoc[]> {
   return (await collection()).find({ onboardingId }).sort({ serviceId: 1 }).toArray();
 }
@@ -117,6 +132,16 @@ export async function markHandoverRequired(
 // handoverOverview.service.ts rather than a separate aggregation query.
 export async function findAllHandoverRequired(): Promise<ServiceAssignmentDoc[]> {
   return (await collection()).find({ status: "handover_required" }).toArray();
+}
+
+// Stage 1 Phase 28 §29/§30 — every assignment currently occupying a slot
+// (same "live" status set findLiveByOnboardingAndService already uses),
+// org-wide — lets the admin dashboard find engagements with NO occupying
+// assignment at all, not just ones stuck mid-handover.
+export async function findAllLive(): Promise<ServiceAssignmentDoc[]> {
+  return (await collection())
+    .find({ status: { $in: ["active", "handover_required", "handover_in_progress"] } })
+    .toArray();
 }
 
 export async function findHandoverRequiredByStaff(

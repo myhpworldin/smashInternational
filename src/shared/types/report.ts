@@ -26,6 +26,41 @@ export const REPORT_STATUS_LABEL: Record<ReportStatus, string> = {
   not_available: "Not Available",
 };
 
+// Stage 1 Phase 21 §20/§21 — the real backend lifecycle a stored report
+// document moves through. Deliberately reuses the client-facing
+// ReportStatus vocabulary above rather than inventing a second,
+// incompatible status system (§21's own instruction) — "ready" is the one
+// new internal-only state client status has no equivalent for (a
+// generated-and-reviewable-by-staff report that isn't published yet), and
+// "archived" is the one internal-only terminal state a client should never
+// see at all (superseded/withdrawn reports are simply excluded from every
+// client-facing query, never mapped to a client status).
+export type ReportGenerationStatus = "draft" | "ready" | "published" | "archived";
+
+export const VALID_REPORT_TRANSITIONS: Record<ReportGenerationStatus, readonly ReportGenerationStatus[]> = {
+  draft: ["ready"],
+  ready: ["draft", "published"],
+  published: ["archived"],
+  // Terminal — nothing transitions out of archived.
+  archived: [],
+};
+
+export function isValidReportTransition(from: ReportGenerationStatus, to: ReportGenerationStatus): boolean {
+  return VALID_REPORT_TRANSITIONS[from].includes(to);
+}
+
+// The one place a stored report's internal status becomes the client-safe
+// label the Phase 11 frontend already renders — `null` means "never show
+// this report to a client at all" (draft/ready are still being prepared;
+// archived is withdrawn), which is exactly how listReportsForClient/
+// getReportForClient filter query results, never by mapping to
+// "not_available" (that client-facing state is reserved for "no report
+// object exists for this request," a different situation entirely).
+export function toClientReportStatus(status: ReportGenerationStatus): ReportStatus | null {
+  if (status === "published") return "available";
+  return null;
+}
+
 export type ReportPeriod = { label: string; startDate: string; endDate: string };
 
 export type ReportListItem = {

@@ -13,6 +13,8 @@ export type PeriodKey =
   | "previous_week"
   | "current_month"
   | "previous_month"
+  | "current_quarter"
+  | "previous_quarter"
   | "custom";
 
 export type ResolvedPeriod = {
@@ -63,6 +65,20 @@ function endOfMonth(s: string): string {
   return toDateString(d);
 }
 
+// Calendar quarters (Jan-Mar, Apr-Jun, Jul-Sep, Oct-Dec) — a fixed
+// business convention, same reasoning as startOfWeek's Monday anchor.
+function startOfQuarter(s: string): string {
+  const [y, m] = s.split("-").map(Number);
+  const quarterStartMonth = Math.floor((m - 1) / 3) * 3 + 1;
+  return `${y}-${pad(quarterStartMonth)}-01`;
+}
+
+function endOfQuarter(quarterStart: string): string {
+  const [y, m] = quarterStart.split("-").map(Number);
+  const d = new Date(Date.UTC(y, m - 1 + 3, 0));
+  return toDateString(d);
+}
+
 function formatLabel(startDate: string, endDate: string): string {
   return startDate === endDate ? startDate : `${startDate} – ${endDate}`;
 }
@@ -110,6 +126,18 @@ export function resolvePeriod(
       const end = endOfMonth(start);
       return { key, startDate: start, endDate: end, label: formatLabel(start, end) };
     }
+    case "current_quarter": {
+      const start = startOfQuarter(today);
+      const end = endOfQuarter(start);
+      return { key, startDate: start, endDate: end, label: formatLabel(start, end) };
+    }
+    case "previous_quarter": {
+      const currentStart = startOfQuarter(today);
+      const prevQuarterLastDay = addDays(currentStart, -1);
+      const start = startOfQuarter(prevQuarterLastDay);
+      const end = endOfQuarter(start);
+      return { key, startDate: start, endDate: end, label: formatLabel(start, end) };
+    }
     case "custom": {
       if (!options.customStart || !options.customEnd) {
         throw new Error("Custom period requires customStart and customEnd.");
@@ -120,6 +148,38 @@ export function resolvePeriod(
       return { key, startDate: options.customStart, endDate: options.customEnd, label: formatLabel(options.customStart, options.customEnd) };
     }
   }
+}
+
+// Stage 1 Phase 21 — resolves a specific named calendar month (e.g.
+// generating September's report in October, or backfilling an older
+// month), independent of "current"/"previous" relative to today. Distinct
+// from resolvePeriod's current_month/previous_month cases, which are
+// always relative to "now."
+export function resolveMonthPeriod(monthKey: string): ResolvedPeriod {
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(monthKey)) {
+    throw new Error('Invalid month key — expected "YYYY-MM".');
+  }
+  const start = `${monthKey}-01`;
+  const end = endOfMonth(start);
+  return { key: "custom", startDate: start, endDate: end, label: formatLabel(start, end) };
+}
+
+// True when a period spans exactly one whole calendar month (from the
+// 1st to that month's last day) — used to decide whether "the previous
+// period" should mean the actual previous calendar month rather than a
+// generic equal-length lookback, for any such period regardless of how it
+// was resolved (today-relative current_month, or a specific past month
+// via resolveMonthPeriod).
+export function isFullCalendarMonth(period: ResolvedPeriod): boolean {
+  return period.startDate.endsWith("-01") && period.endDate === endOfMonth(period.startDate);
+}
+
+export function previousCalendarMonthOf(period: ResolvedPeriod): ResolvedPeriod {
+  const [y, m] = period.startDate.split("-").map(Number);
+  const prevMonthDate = new Date(Date.UTC(y, m - 2, 1));
+  const start = toDateString(prevMonthDate);
+  const end = endOfMonth(start);
+  return { key: "custom", startDate: start, endDate: end, label: formatLabel(start, end) };
 }
 
 // The immediately preceding period of equal length (§15) — e.g. Sep 1-17

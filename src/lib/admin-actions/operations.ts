@@ -7,8 +7,6 @@
 // validation/loading/error UX.
 export type AdminActionResult = { ok: true } | { ok: false; errors: string[] };
 
-const NOT_CONNECTED = ["This isn't connected to a backend yet — nothing was saved."];
-
 // Stage 1 Phase 17 — real persistence via POST /api/admin/projects
 // (serviceEngagements.service.ts et al. are still stubs; this is the
 // first admin-action function in this file to graduate from the
@@ -66,8 +64,32 @@ export async function saveBudgetSnapshot(input: unknown): Promise<AdminActionRes
   }
 }
 
-export async function savePerformanceEntry(_input: unknown): Promise<AdminActionResult> {
-  return { ok: false, errors: NOT_CONNECTED };
+// Stage 1 Phase 13's per-client performance-entry form (AdminPerformanceEntryPanel)
+// and Phase 14's cross-client Daily Data Entry workspace both ultimately
+// save the same kind of record — Stage 1 Phase 23 wires this one to the
+// exact same real endpoint Phase 19 built for the other
+// (POST /api/admin/daily-records) rather than standing up a second,
+// competing backend for what's structurally identical data. This
+// panel has no campaign/project selector, so `campaignOrProjectId` is
+// filled in as `null` (the "no specific campaign/project" value the
+// endpoint already expects) before sending.
+export async function savePerformanceEntry(input: unknown): Promise<AdminActionResult> {
+  const payload =
+    typeof input === "object" && input !== null ? { campaignOrProjectId: null, ...input } : input;
+  try {
+    const response = await fetch("/api/admin/daily-records", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok || !data?.ok) {
+      return { ok: false, errors: data?.errors ?? [data?.message ?? "Couldn't save this entry."] };
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false, errors: ["Couldn't reach the server. Check your connection and try again."] };
+  }
 }
 
 // Stage 1 Phase 19 — real persistence via POST /api/admin/daily-records.

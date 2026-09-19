@@ -7,6 +7,7 @@ import * as auditLog from "@/server/repositories/auditLog.repo";
 import { hashPassword } from "@/server/auth/password";
 import { generateTempPassword } from "@/server/auth/tempPassword";
 import { cascadeAvailabilityChange, recordAvailabilityCascadeAudit } from "@/server/services/staffAvailability.service";
+import { runWithOptionalTransaction } from "@/server/db/transaction";
 import type { Role } from "@/shared/types/user";
 import type { AdminUserRow, AdminUserStatus } from "@/shared/types/adminUser";
 
@@ -240,15 +241,10 @@ export async function updateUserRole(
 
   if (shouldCascadeAwayFromStaff) {
     const client = await getMongoClient();
-    const session = client.startSession();
-    try {
-      await session.withTransaction(async () => {
-        await usersRepo.updateRole(target._id, role, session);
-        affectedAssignmentIds = await cascadeAvailabilityChange(target, actor, "unavailable", null, session);
-      });
-    } finally {
-      await session.endSession();
-    }
+    await runWithOptionalTransaction(client, async (session) => {
+      await usersRepo.updateRole(target._id, role, session);
+      affectedAssignmentIds = await cascadeAvailabilityChange(target, actor, "unavailable", null, session);
+    });
   } else {
     await usersRepo.updateRole(target._id, role);
   }
@@ -322,15 +318,10 @@ export async function setUserStatus(
     const nextSessionVersion = (target.sessionVersion ?? 1) + 1;
     if (shouldCascadeToUnavailable) {
       const client = await getMongoClient();
-      const session = client.startSession();
-      try {
-        await session.withTransaction(async () => {
-          await usersRepo.setStatus(target._id, status, nextSessionVersion, session);
-          affectedAssignmentIds = await cascadeAvailabilityChange(target, actor, "unavailable", null, session);
-        });
-      } finally {
-        await session.endSession();
-      }
+      await runWithOptionalTransaction(client, async (session) => {
+        await usersRepo.setStatus(target._id, status, nextSessionVersion, session);
+        affectedAssignmentIds = await cascadeAvailabilityChange(target, actor, "unavailable", null, session);
+      });
     } else {
       await usersRepo.setStatus(target._id, status, nextSessionVersion);
     }
@@ -348,6 +339,68 @@ export async function setUserStatus(
     targetEmail: target.email,
     targetRole: target.role,
     metadata: { fromStatus: currentStatus, toStatus: status },
+  });
+
+  if (shouldCascadeToUnavailable) {
+    await recordAvailabilityCascadeAudit(target, actor, "available", "unavailable", null, affectedAssignmentIds);
+  }
+
+  return { ok: true };
+}
+
+// Hard delete, not a status change — the account is gone, not merely
+// blocked (Block already covers "revoke access but keep the record"). The
+// same guardrails as setUserStatus's blocked path apply for the same
+// reasons: never your own account (this action must never lock the admin
+// performing it out of their own session), and never the organization's
+// last remaining admin. A staff member's active assignments are cascaded
+// to handover_required the same way blocking one does — deleting the
+// account must not silently orphan work the way it would if the
+// assignment kept pointing at a staffUserId that no longer resolves to
+// anything. The audit entry is written from the snapshotted actor/target
+// details (same pattern as every other action here) so the log entry
+// stays meaningful even though the target row itself no longer exists to
+// look up afterward.
+export async function deleteUser(targetId: string, actor: UserDoc): Promise<MutationResult> {
+  if (!ObjectId.isValid(targetId)) return { ok: false, errors: ["User not found."] };
+  if (targetId === actor._id.toHexString()) {
+    return { ok: false, errors: ["You can't delete your own account."] };
+  }
+
+  const target = await usersRepo.findById(targetId);
+  if (!target) return { ok: false, errors: ["User not found."] };
+
+  if (target.role === "admin") {
+    const activeAdmins = await usersRepo.countActiveAdmins();
+    if (activeAdmins <= 1) {
+      return { ok: false, errors: ["Can't delete the organization's only active admin."] };
+    }
+  }
+
+  const shouldCascadeToUnavailable =
+    target.role === "staff" && (target.availability ?? "available") === "available";
+  let affectedAssignmentIds: ObjectId[] = [];
+
+  if (shouldCascadeToUnavailable) {
+    const client = await getMongoClient();
+    await runWithOptionalTransaction(client, async (session) => {
+      affectedAssignmentIds = await cascadeAvailabilityChange(target, actor, "unavailable", null, session);
+      await usersRepo.deleteById(target._id, session);
+    });
+  } else {
+    await usersRepo.deleteById(target._id);
+  }
+
+  await auditLog.record({
+    action: "user_deleted",
+    actorUserId: actor._id,
+    actorName: displayName(actor),
+    actorEmail: actor.email,
+    targetUserId: target._id,
+    targetName: displayName(target),
+    targetEmail: target.email,
+    targetRole: target.role,
+    metadata: { role: target.role, status: target.status ?? "active" },
   });
 
   if (shouldCascadeToUnavailable) {

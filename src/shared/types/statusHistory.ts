@@ -11,7 +11,20 @@ import type { Role } from "@/shared/types/user";
 // account" — and an onboarding/service-engagement transition doesn't fit
 // that shape without inventing a fake target user. Two lean, correctly-
 // scoped logs beat one log stretched to cover both.
-export type StatusHistoryEntityType = "onboarding" | "service_engagement";
+// Stage 1 Phase 21 — "report" added for report lifecycle transitions
+// (generated/ready/published/archived), same generic append-only log,
+// same reasoning: a report transition isn't "something happened to a
+// user account" either. Stage 1 Phase 22 adds "approval"/"deliverable"/
+// "support_ticket" for the same reasoning again — these back both the
+// audit trail (§11/§46) and the client-safe Activity feed
+// (clientEvents.service.ts), the same dual role "report" already plays.
+export type StatusHistoryEntityType =
+  | "onboarding"
+  | "service_engagement"
+  | "report"
+  | "approval"
+  | "deliverable"
+  | "support_ticket";
 
 export type StatusHistoryEntry = {
   id: string;

@@ -1,4 +1,5 @@
-import { resolveOnboardingIdentity } from "@/server/services/onboarding.service";
+import { redirect } from "next/navigation";
+import { resolveOnboardingIdentity, isAssistedOnboarding } from "@/server/services/onboarding.service";
 import OnboardingWizard from "@/components/onboarding/OnboardingWizard";
 import OnboardingStatusScreen from "@/components/onboarding/OnboardingStatusScreen";
 import StepTransition from "@/components/onboarding/StepTransition";
@@ -34,17 +35,40 @@ export default async function OnboardingPage({
   // (Phase 5 spec, §4/§5).
   await blockIfPasswordChangeRequired();
 
+  // A client whose account was created by an admin has their onboarding
+  // filled in on their behalf by the SMASH team — they have no wizard work
+  // of their own to do, so this route (however reached, including a direct
+  // visit) always sends them to the client panel instead. A no-op for an
+  // anonymous visitor (no real session at all).
+  if (await isAssistedOnboarding()) {
+    redirect("/dashboard");
+  }
+
   const { doc } = await resolveOnboardingIdentity();
   const params = await searchParams;
 
   if (LOCKED_STATUSES.has(doc.status)) {
-    const company = doc.company as Partial<CompanyInput> | null;
     // Stage 1 Phase 2: the ?submitted=1 marker set by OnboardingWizard's
     // own post-submit navigation is the only signal that this render is
     // the instant right after a real submission — status alone can't tell
     // that apart from a client returning to this same URL a week later,
     // and only the former should run the countdown into the dashboard.
     const justSubmitted = doc.status === "submitted" && params.submitted === "1";
+
+    // Anything else reaching a locked status here — a bookmark, a typed
+    // URL, a stale tab reopened days later — is a client who has already
+    // finished the wizard and belongs on /dashboard (the same destination
+    // resolveClientDestination sends them to right after login; see
+    // src/lib/routing/clientDestination.ts). Without this, this route
+    // dead-ended: the status screen below renders with no countdown and
+    // no link anywhere back into the portal, so a client landing here any
+    // way other than the instant after submitting had no way to navigate
+    // onward at all.
+    if (!justSubmitted) {
+      redirect("/dashboard");
+    }
+
+    const company = doc.company as Partial<CompanyInput> | null;
     return (
       // The wizard's own steps all fade in via this same component (see
       // OnboardingWizard) — reused here, not a new animation, so the

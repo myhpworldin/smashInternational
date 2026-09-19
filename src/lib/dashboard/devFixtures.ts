@@ -26,6 +26,7 @@ function base(overrides: Partial<DashboardData>): DashboardData {
     budgetSnapshot: null,
     pendingApprovalsCount: 0,
     recentDeliverablesCount: 0,
+    accountManagerName: null,
     ...overrides,
   };
 }

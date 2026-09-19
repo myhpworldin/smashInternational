@@ -9,9 +9,18 @@ import * as projectDeliverablesRepo from "@/server/repositories/projectDeliverab
 import { assertClientOwnership } from "@/server/auth/ownership";
 import { getServiceById } from "@/shared/config/services";
 import { getMetricGroup } from "@/lib/performance/metricGroups";
-import { resolvePeriod, previousEquivalentPeriod, type PeriodKey, type ResolvedPeriod } from "@/shared/analytics/period";
+import {
+  resolvePeriod,
+  previousEquivalentPeriod,
+  isFullCalendarMonth,
+  previousCalendarMonthOf,
+  type PeriodKey,
+  type ResolvedPeriod,
+} from "@/shared/analytics/period";
 import {
   costPerLead,
+  costPerClick,
+  costPerAcquisition,
   clickThroughRate,
   conversionRate,
   qualifiedRate,
@@ -175,14 +184,16 @@ export async function getPerformanceTrend(
 
 // §15 — current period vs. its comparable predecessor, with a null (not
 // fabricated) percentChange whenever the previous value is zero/absent.
-// "current_week"/"current_month" compare against the actual calendar
-// previous_week/previous_month (§15's own worked example is calendar-
-// aligned: "September 1-17 vs August 1-17" reads as current vs previous
-// *month*, not an arbitrary 17-day lookback) — every other period key
-// (today/yesterday/last_7_days/custom) has no such calendar anchor, so it
-// falls back to the immediately preceding period of equal length.
+// Any period spanning a full calendar month — "current_month" or a
+// specific past month resolved via resolveMonthPeriod for report
+// generation (Phase 21) — compares against the actual previous calendar
+// month (§15's own worked example is calendar-aligned: "September 1-17
+// vs August 1-17" reads as current vs previous *month*, not an arbitrary
+// lookback); "current_week" compares against the actual previous week.
+// Every other period has no such calendar anchor, so it falls back to the
+// immediately preceding period of equal length.
 function resolvePreviousPeriod(currentPeriod: ResolvedPeriod, periodKey: PeriodKey, today: string): ResolvedPeriod {
-  if (periodKey === "current_month") return resolvePeriod("previous_month", { today });
+  if (isFullCalendarMonth(currentPeriod)) return previousCalendarMonthOf(currentPeriod);
   if (periodKey === "current_week") return resolvePeriod("previous_week", { today });
   return previousEquivalentPeriod(currentPeriod);
 }
@@ -272,6 +283,8 @@ async function computeCampaignAnalysis(
     metrics,
     derived: {
       costPerLead: costPerLead(metrics.spend, metrics.leads),
+      costPerClick: costPerClick(metrics.spend, metrics.clicks),
+      costPerAcquisition: costPerAcquisition(metrics.spend, metrics.closedDeals),
       clickThroughRate: clickThroughRate(metrics.clicks, metrics.impressions),
       conversionRate: conversionRate(metrics.closedDeals, metrics.leads),
     },

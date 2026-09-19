@@ -4,12 +4,19 @@ import * as statusHistoryRepo from "@/server/repositories/statusHistory.repo";
 import { listEngagementsForClient } from "@/server/services/serviceEngagements.service";
 import type { DashboardActivityItem } from "@/shared/types/dashboard";
 
-// Stage 1 Phase 7 (extracted Phase 15 §9/§34) — the single place a
-// client's real statusHistory turns into client-safe, human-readable
-// events. Originally lived only inside dashboard.service.ts; pulled out
-// here so the new Activity page and the Notification center can reuse
-// the exact same derivation instead of a second copy of these phrasings
-// drifting out of sync with the dashboard's own Recent Activity section.
+// Stage 1 Phase 7 (extracted Phase 15 §9/§34, extended Phase 21/22 §24/
+// §25/§33) — the single place a client's real statusHistory turns into
+// client-safe, human-readable events. Originally lived only inside
+// dashboard.service.ts; pulled out here so the Activity page, the
+// dashboard's Recent Activity section, and the Notification center all
+// reuse the exact same derivation instead of separate copies of these
+// phrasings drifting out of sync. Every entity type statusHistory can
+// carry (shared/types/statusHistory.ts) gets its own explicit branch
+// below — an entity this function doesn't yet recognize is skipped
+// rather than misread as some other kind (the bug this rewrite fixes:
+// the previous version silently treated every non-onboarding entry as a
+// service-engagement one, which happened to no-op harmlessly for
+// Phase 21's new "report" entries but was never actually correct).
 function describeOnboardingTransition(newStatus: string): string | null {
   switch (newStatus) {
     case "submitted":
@@ -48,6 +55,40 @@ function describeEngagementTransition(serviceLabel: string, newStatus: string): 
   }
 }
 
+function describeReportTransition(newStatus: string): string | null {
+  return newStatus === "published" ? "A new performance report is available" : null;
+}
+
+function describeApprovalTransition(newStatus: string): string | null {
+  switch (newStatus) {
+    case "awaiting_client":
+      return "A new item is ready for your review";
+    case "approved":
+      return "You approved an item";
+    case "changes_requested":
+      return "You requested changes to an item";
+    default:
+      return null;
+  }
+}
+
+function describeDeliverableTransition(newStatus: string): string | null {
+  return newStatus === "ready_for_review" ? "A deliverable is ready for review" : null;
+}
+
+function describeSupportTicketTransition(newStatus: string): string | null {
+  switch (newStatus) {
+    case "open":
+      return "Support ticket created";
+    case "resolved":
+      return "Support ticket resolved";
+    case "closed":
+      return "Support ticket closed";
+    default:
+      return null;
+  }
+}
+
 // `limit` is passed straight to the repo query (already indexed on
 // clientId) rather than fetched-then-sliced, so a small "Recent Activity"
 // call and the full Activity page's larger one both stay cheap.
@@ -59,27 +100,41 @@ export async function getClientEvents(clientId: ObjectId, limit: number): Promis
   const items: DashboardActivityItem[] = [];
 
   for (const entry of entries) {
-    if (entry.entityType === "onboarding") {
-      const label = describeOnboardingTransition(entry.newStatus);
-      if (!label) continue;
-      items.push({
-        id: entry._id.toHexString(),
-        label,
-        occurredAt: entry.changedAt.toISOString(),
-        href: "/dashboard/onboarding",
-      });
-      continue;
+    switch (entry.entityType) {
+      case "onboarding": {
+        const label = describeOnboardingTransition(entry.newStatus);
+        if (label) items.push({ id: entry._id.toHexString(), label, occurredAt: entry.changedAt.toISOString(), href: "/dashboard/onboarding" });
+        break;
+      }
+      case "service_engagement": {
+        const engagementId = entry.entityId.toHexString();
+        const label = describeEngagementTransition(engagementServiceLabelById.get(engagementId) ?? "A service", entry.newStatus);
+        if (label) items.push({ id: entry._id.toHexString(), label, occurredAt: entry.changedAt.toISOString(), href: `/dashboard/services/${engagementId}` });
+        break;
+      }
+      case "report": {
+        const label = describeReportTransition(entry.newStatus);
+        if (label) items.push({ id: entry._id.toHexString(), label, occurredAt: entry.changedAt.toISOString(), href: "/dashboard/reports" });
+        break;
+      }
+      case "approval": {
+        const label = describeApprovalTransition(entry.newStatus);
+        if (label) items.push({ id: entry._id.toHexString(), label, occurredAt: entry.changedAt.toISOString(), href: `/dashboard/approvals/${entry.entityId.toHexString()}` });
+        break;
+      }
+      case "deliverable": {
+        const label = describeDeliverableTransition(entry.newStatus);
+        if (label) items.push({ id: entry._id.toHexString(), label, occurredAt: entry.changedAt.toISOString(), href: `/dashboard/deliverables/${entry.entityId.toHexString()}` });
+        break;
+      }
+      case "support_ticket": {
+        const label = describeSupportTicketTransition(entry.newStatus);
+        if (label) items.push({ id: entry._id.toHexString(), label, occurredAt: entry.changedAt.toISOString(), href: `/dashboard/support/${entry.entityId.toHexString()}` });
+        break;
+      }
+      default:
+        break;
     }
-
-    const engagementId = entry.entityId.toHexString();
-    const label = describeEngagementTransition(engagementServiceLabelById.get(engagementId) ?? "A service", entry.newStatus);
-    if (!label) continue;
-    items.push({
-      id: entry._id.toHexString(),
-      label,
-      occurredAt: entry.changedAt.toISOString(),
-      href: `/dashboard/services/${engagementId}`,
-    });
   }
 
   return items;

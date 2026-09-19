@@ -27,6 +27,10 @@ export type HandoverSummary = {
   affectedServiceCount: number;
   affectedClientCount: number;
   completedHandoverCount: number;
+  // Stage 1 Phase 28 §29/§30 — distinct from the pending-handover figures
+  // above: a live service engagement that was never assigned to anyone
+  // in the first place, not one that lost its owner.
+  unassignedActiveServiceCount: number;
 };
 
 export type CompletedHandoverRow = {

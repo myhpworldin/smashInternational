@@ -58,6 +58,7 @@ const organizationJsonLd = {
   url: siteUrl,
   logo: `${siteUrl}/apple-icon`,
   telephone: site.phoneHref,
+  email: site.email,
   address: {
     "@type": "PostalAddress",
     streetAddress: `${site.address.line1}, ${site.address.street}, ${site.address.locality}`,
@@ -70,7 +71,6 @@ const organizationJsonLd = {
     "@type": "Organization",
     name: site.parent,
   },
-  // TODO: add email once the site.ts placeholder is replaced with a real value
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

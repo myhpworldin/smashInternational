@@ -10,10 +10,25 @@ import type { UserDoc } from "@/server/repositories/users.repo";
 import * as auditLog from "@/server/repositories/auditLog.repo";
 import * as notificationsRepo from "@/server/repositories/notifications.repo";
 import { getServiceById } from "@/shared/config/services";
-import type { ServiceAssignmentRow, StaffAssignmentRow, StaffHandoverQueueRow } from "@/shared/types/serviceAssignment";
+import {
+  ACCOUNT_MANAGER_SLOT,
+  isAccountManagerSlot,
+  type ServiceAssignmentRow,
+  type StaffAssignmentRow,
+  type StaffHandoverQueueRow,
+} from "@/shared/types/serviceAssignment";
 
 function displayName(user: Pick<UserDoc, "name" | "email">): string {
   return user.name ?? user.email;
+}
+
+// The one place a serviceId becomes its display label — every call site
+// that used to inline `getServiceById(id)?.label ?? id` now goes through
+// here so the account-manager slot resolves the same way everywhere
+// instead of leaking its raw sentinel string into any UI.
+function resolveServiceLabel(serviceId: string): string {
+  if (isAccountManagerSlot(serviceId)) return "Account Manager";
+  return getServiceById(serviceId)?.label ?? serviceId;
 }
 
 export type CreateAssignmentResult = { ok: true; id: string } | { ok: false; errors: string[] };
@@ -35,11 +50,17 @@ export async function createAssignment(
   const onboarding = await onboardingRepo.findById(onboardingId);
   if (!onboarding) return { ok: false, errors: ["Onboarding record not found."] };
 
-  if (!getServiceById(input.serviceId)) {
-    return { ok: false, errors: ["Unknown service."] };
-  }
-  if (!onboarding.selectedServiceIds.includes(input.serviceId)) {
-    return { ok: false, errors: ["This client didn't select that service."] };
+  // The account-manager slot is a client-wide relationship-owner
+  // assignment, not tied to any one selected service — skip the
+  // catalog/selected-service checks that only make sense for a real
+  // service assignment.
+  if (!isAccountManagerSlot(input.serviceId)) {
+    if (!getServiceById(input.serviceId)) {
+      return { ok: false, errors: ["Unknown service."] };
+    }
+    if (!onboarding.selectedServiceIds.includes(input.serviceId)) {
+      return { ok: false, errors: ["This client didn't select that service."] };
+    }
   }
 
   const staff = await usersRepo.findById(input.staffUserId);
@@ -125,7 +146,7 @@ async function buildAssignmentRows(docs: ServiceAssignmentDoc[]): Promise<Servic
         id: doc._id.toHexString(),
         onboardingId: doc.onboardingId.toHexString(),
         serviceId: doc.serviceId,
-        serviceLabel: getServiceById(doc.serviceId)?.label ?? doc.serviceId,
+        serviceLabel: resolveServiceLabel(doc.serviceId),
         status: doc.status,
         staffUserId: doc.staffUserId.toHexString(),
         staffName: staff ? displayName(staff) : "(former staff member)",
@@ -215,7 +236,7 @@ export async function transferAssignment(
   const previousStaff = await usersRepo.findById(assignment.staffUserId.toHexString());
   const onboarding = await onboardingRepo.findById(assignment.onboardingId);
   const companyName = (onboarding?.company as { name?: string } | null)?.name ?? "this client";
-  const serviceLabel = getServiceById(assignment.serviceId)?.label ?? assignment.serviceId;
+  const serviceLabel = resolveServiceLabel(assignment.serviceId);
 
   const client = await getMongoClient();
   const session = client.startSession();
@@ -328,10 +349,26 @@ export async function listActiveAssignmentsForStaff(staffUserId: string): Promis
     return {
       id: doc._id.toHexString(),
       serviceId: doc.serviceId,
-      serviceLabel: getServiceById(doc.serviceId)?.label ?? doc.serviceId,
+      serviceLabel: resolveServiceLabel(doc.serviceId),
       clientCompanyName: company?.name ?? "(company name not set)",
       status: doc.status,
       assignedAt: doc.assignedAt.toISOString(),
     };
   });
+}
+
+// Stage 1 Phase 28 §18 — the ONE thing about assignment this codebase
+// exposes to a client at all, and deliberately just this: a display
+// name, nothing else. Never the staff member's email, never their
+// availability/blocked status, never whether a handover is in progress,
+// never who held the role before ("Rahul resigned," "handover failed")
+// — exactly the internal churn detail §18 says a client must never see.
+// `null` (not an empty string) when no account manager is currently
+// assigned, so the caller can render an honest "not yet assigned" state
+// instead of an empty label.
+export async function getAccountManagerNameForClient(clientId: ObjectId): Promise<string | null> {
+  const assignment = await assignmentsRepo.findLiveByClientAndService(clientId, ACCOUNT_MANAGER_SLOT);
+  if (!assignment || assignment.status !== "active") return null;
+  const staff = await usersRepo.findById(assignment.staffUserId.toHexString());
+  return staff ? displayName(staff) : null;
 }

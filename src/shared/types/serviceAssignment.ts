@@ -19,6 +19,22 @@ export const ASSIGNMENT_STATUS_LABEL: Record<AssignmentStatus, string> = {
   cancelled: "Cancelled",
 };
 
+// Stage 1 Phase 28 §3A/§16 — "Account Manager" is a client-wide
+// assignment (the overall relationship owner), distinct from a per-
+// service assignment. Rather than a second collection/model duplicating
+// every piece of continuity/handover/audit/notification machinery this
+// file's assignment types already have, an account-manager assignment is
+// just a ServiceAssignmentDoc whose `serviceId` is this reserved sentinel
+// instead of a real catalog service id — it reuses the exact same
+// create/reassign/handover/transfer/audit/notification code paths
+// unchanged. Never a value `getServiceById` (shared/config/services.ts)
+// could ever return, so it can't collide with a real service.
+export const ACCOUNT_MANAGER_SLOT = "__account_manager__";
+
+export function isAccountManagerSlot(serviceId: string): boolean {
+  return serviceId === ACCOUNT_MANAGER_SLOT;
+}
+
 // One completed ownership transition (Phase 3 §16) — the admin view uses
 // these to distinguish "current assignee" (the row's own staffName) from
 // "previous assignees" (this list) without a separate history page.

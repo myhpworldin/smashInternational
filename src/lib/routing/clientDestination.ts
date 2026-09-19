@@ -33,11 +33,21 @@ export type ClientAuthStatus = "unauthenticated" | "authenticated";
 // started but didn't finish) is sent straight to /onboarding instead —
 // they have real work to do there, so skipping the dashboard detour is
 // the better UX, not an oversight.
+//
+// `assistedBySmash` overrides all of that: it's true only for a client
+// whose account was created by an admin rather than through self-signup
+// (see isAssistedOnboarding in onboarding.service.ts) — the SMASH team is
+// filling their onboarding in on their behalf, so the client has no
+// wizard work of their own to do and must land in the client panel
+// (/dashboard) regardless of how far that onboarding record has
+// progressed, never in /onboarding.
 export function resolveClientDestination(
   auth: ClientAuthStatus,
   progress: OnboardingProgressState | null,
+  assistedBySmash: boolean = false,
 ): string {
   if (auth === "unauthenticated") return "/login";
+  if (assistedBySmash) return "/dashboard";
   if (progress === "not_started" || progress === "incomplete") return "/onboarding";
   return "/dashboard";
 }
@@ -53,7 +63,7 @@ export async function determineClientDestination(): Promise<string> {
     const response = await fetch("/api/onboarding");
     const data = await response.json();
     const progress = resolveOnboardingProgress(data.onboarding.status, data.onboarding);
-    return resolveClientDestination("authenticated", progress);
+    return resolveClientDestination("authenticated", progress, Boolean(data.assistedBySmash));
   } catch {
     return "/onboarding";
   }

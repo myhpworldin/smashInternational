@@ -9,7 +9,14 @@ import ApprovalActions from "@/components/client/ApprovalActions";
 import { FieldGrid, Field } from "@/components/client/FieldGrid";
 import { formatDateTime } from "@/lib/format/date";
 
-const ACTIONABLE = new Set(["awaiting_client", "updated", "resubmitted"]);
+// Stage 1 Phase 22 — added "viewed": the real backend now transitions
+// awaiting_client -> viewed the moment a client opens this page
+// (getApprovalForClient's implicit "client views" step, since there's no
+// separate "mark as viewed" control anywhere in this UI). Without this,
+// simply opening an approval would make it disappear from being
+// actionable one render later — a real gap this Phase 12 constant
+// predates, now closed to keep the contract with the real backend valid.
+const ACTIONABLE = new Set(["awaiting_client", "viewed", "updated", "resubmitted"]);
 
 // Stage 1 Phase 12 §25/§26 — same ownership pattern as every other
 // client detail page this session: getApprovalForClient returns null for

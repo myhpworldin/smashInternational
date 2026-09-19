@@ -1,19 +1,24 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import type { SupportTicketPriority } from "@/shared/types/supportTicket";
 import { createSupportTicket } from "@/lib/client-actions/support";
 
 const PRIORITY_OPTIONS: SupportTicketPriority[] = ["low", "medium", "high"];
 
-// Stage 1 Phase 15 §21 — a real, fully validated ticket-creation form.
-// Submission goes through createSupportTicket, which is honest about not
-// being connected to a backend yet — the form still exercises full
-// client-side validation and loading/error states (§21: "prevent empty or
-// meaningless submissions").
-export default function SupportTicketForm({ serviceOptions }: { serviceOptions: string[] }) {
+// Stage 1 Phase 15 §21, wired to a real backend Phase 23 — a fully
+// validated ticket-creation form calling createSupportTicket, which now
+// really persists the ticket (§21: "prevent empty or meaningless
+// submissions" is still enforced client-side first either way).
+export default function SupportTicketForm({
+  serviceOptions,
+}: {
+  serviceOptions: { id: string; label: string }[];
+}) {
+  const router = useRouter();
   const [subject, setSubject] = useState("");
-  const [serviceLabel, setServiceLabel] = useState(serviceOptions[0] ?? "");
+  const [serviceId, setServiceId] = useState(serviceOptions[0]?.id ?? "");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<SupportTicketPriority>("medium");
   const [submitting, setSubmitting] = useState(false);
@@ -37,7 +42,7 @@ export default function SupportTicketForm({ serviceOptions }: { serviceOptions: 
     setError(null);
     const result = await createSupportTicket({
       subject: subject.trim(),
-      serviceLabel: serviceLabel || undefined,
+      serviceId: serviceId || undefined,
       description: description.trim(),
       priority,
     });
@@ -48,6 +53,7 @@ export default function SupportTicketForm({ serviceOptions }: { serviceOptions: 
       return;
     }
     setSubmitted(true);
+    router.refresh();
   };
 
   if (submitted) {
@@ -76,13 +82,13 @@ export default function SupportTicketForm({ serviceOptions }: { serviceOptions: 
         <label className="flex flex-col gap-1">
           <span className="font-body text-xs text-ash uppercase">Service</span>
           <select
-            value={serviceLabel}
-            onChange={(e) => setServiceLabel(e.target.value)}
+            value={serviceId}
+            onChange={(e) => setServiceId(e.target.value)}
             className="rounded-none border border-white/15 bg-void px-3 py-2 font-body text-sm text-bone focus-visible:-outline-offset-2"
           >
             {serviceOptions.map((s) => (
-              <option key={s} value={s}>
-                {s}
+              <option key={s.id} value={s.id}>
+                {s.label}
               </option>
             ))}
           </select>

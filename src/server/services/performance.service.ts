@@ -17,6 +17,7 @@ import type {
   PerformanceMetrics,
 } from "@/shared/types/performance";
 import type { MetricTotals } from "@/shared/types/analytics";
+import type { PeriodKey } from "@/shared/analytics/period";
 
 // PerformanceMetrics (Phase 10) represents "not applicable" as an absent
 // key (`undefined`), while the analysis engine's MetricTotals represents
@@ -52,14 +53,27 @@ const TREND_METRIC = "leads" as const;
 const COMPARISON_METRICS = ["leads", "calls", "qualifiedLeads", "appointments", "proposals", "closedDeals", "revenue"] as const;
 
 export async function getPerformanceForClient(clientId: ObjectId): Promise<PerformanceSnapshot | null> {
+  return buildPerformanceSnapshot(clientId, "current_month");
+}
+
+// Stage 1 Phase 21 — factored out of getPerformanceForClient so report
+// generation (reports.service.ts) can build the exact same
+// PerformanceSnapshot shape for an arbitrary reporting period (a monthly
+// report needs "the month being reported on," not always "the current
+// month") without duplicating this assembly logic a second time.
+export async function buildPerformanceSnapshot(
+  clientId: ObjectId,
+  periodKey: PeriodKey,
+  custom?: { start: string; end: string },
+): Promise<PerformanceSnapshot | null> {
   const engagements = await serviceEngagementsRepo.listByClientId(clientId);
   if (engagements.length === 0) return null;
 
   const [summary, trend, comparison, services, campaignDocs] = await Promise.all([
-    getPerformanceSummary(clientId, "current_month"),
-    getPerformanceTrend(clientId, "current_month"),
-    getPerformanceComparison(clientId, "current_month"),
-    getServiceBreakdown(clientId, "current_month"),
+    getPerformanceSummary(clientId, periodKey, custom),
+    getPerformanceTrend(clientId, periodKey, custom),
+    getPerformanceComparison(clientId, periodKey, custom),
+    getServiceBreakdown(clientId, periodKey, custom),
     campaignsRepo.listByClientId(clientId),
   ]);
 

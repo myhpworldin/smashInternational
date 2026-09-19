@@ -14,7 +14,13 @@ export type ClientNotificationType =
   | "document_added"
   | "budget_request_status_changed"
   | "message_received"
-  | "support_ticket_updated";
+  | "support_ticket_updated"
+  // Stage 1 Phase 22 — additive: "a deliverable is ready for review" has
+  // no equivalent among the types above (approval_requested is a
+  // different event — an approval being sent for review, not a
+  // deliverable's own status reaching ready-for-review independent of
+  // any approval).
+  | "deliverable_ready";
 
 export type ClientNotification = {
   id: string;

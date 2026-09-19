@@ -1,10 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { loginSchema } from "@/shared/validation/auth";
 import { login } from "@/server/services/auth.service";
+import { isRateLimited } from "@/server/rate-limit";
 
 export const runtime = "nodejs";
 
+// Stage 1 Phase 27 — this password-login endpoint had no rate limiting
+// at all, unlike every other auth endpoint in this codebase (signup,
+// both OTP-verify routes, resend-otp all already use isRateLimited),
+// leaving unlimited password-guessing attempts against any account.
+// Reuses the exact same existing helper rather than inventing new
+// throttling infrastructure.
 export async function POST(request: NextRequest) {
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  if (isRateLimited(`login:${ip}`)) {
+    return NextResponse.json(
+      { ok: false, message: "Too many requests. Try again in a minute." },
+      { status: 429 },
+    );
+  }
+
   const body = await request.json().catch(() => null);
   const parsed = loginSchema.safeParse(body);
 

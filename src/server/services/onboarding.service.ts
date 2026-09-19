@@ -8,7 +8,7 @@ import * as gridfs from "@/server/storage/gridfs";
 import { uploadSmashAsset, deleteSmashAsset } from "@/server/storage/cloudinary";
 import { notifyOnboardingSubmitted } from "@/server/notifications/onboarding-notifications";
 import { generateAccessToken, readAccessToken } from "@/server/onboarding/access";
-import { verifySession } from "@/server/auth/dal";
+import { verifySession, getCurrentUser } from "@/server/auth/dal";
 import { createEngagementsForApprovedOnboarding } from "@/server/services/serviceEngagements.service";
 import * as statusHistoryRepo from "@/server/repositories/statusHistory.repo";
 import type { OnboardingDoc } from "@/server/repositories/onboarding.repo";
@@ -113,6 +113,18 @@ export async function resolveOnboardingIdentity(): Promise<{ doc: OnboardingDoc;
   }
 
   return { doc: await getOrCreateAnonymousDraft(), viaSession: false };
+}
+
+// True only for a logged-in client whose account was created by an admin
+// (createByAdmin in users.repo.ts, always with createdBy set) rather than
+// through public self-signup — the signal that this client's onboarding is
+// being filled in on their behalf by the SMASH team, not by the client
+// themselves. Such a client should never be routed into the self-serve
+// /onboarding wizard: see resolveClientDestination in
+// src/lib/routing/clientDestination.ts, which this backs.
+export async function isAssistedOnboarding(): Promise<boolean> {
+  const user = await getCurrentUser();
+  return Boolean(user && user.role === "client" && user.createdBy);
 }
 
 // The caller (API route) must have already verified onboardingId belongs

@@ -1,5 +1,5 @@
 import { requireRole, getCurrentUser } from "@/server/auth/dal";
-import { listNotificationsForClient } from "@/server/services/clientNotifications.service";
+import { getUnreadCountForClient } from "@/server/services/clientNotifications.service";
 import ClientPortalShell from "@/components/client/ClientPortalShell";
 
 // Stage 1 Phase 2 — the client portal's real access gate, mirroring
@@ -14,13 +14,15 @@ import ClientPortalShell from "@/components/client/ClientPortalShell";
 export default async function ClientPortalLayout({ children }: { children: React.ReactNode }) {
   await requireRole("client");
   const user = await getCurrentUser();
-  // Section 7 of Phase 15: a single source of truth for the nav badge —
-  // the same real, server-derived notification list the Notifications
-  // page itself reads, not a separate counter that could disagree with
-  // it. "Unread" here means "server has never seen it marked read" (no
-  // backend persists that yet); the page's own sessionStorage-based
-  // read-state is a separate, purely client-side UX layer on top.
-  const notificationCount = user?.clientId ? (await listNotificationsForClient(user.clientId)).length : 0;
+  // Section 7 of Phase 15, corrected Phase 23 — this used to count every
+  // notification (`.length`), the only option before Phase 22 gave the
+  // persisted notification types a real read/unread flag; that made the
+  // nav badge show "how many notifications exist," not "how many are
+  // unread," and it would only have grown as a client's history grew.
+  // getUnreadCountForClient is the real unread count for those persisted
+  // types (the two still-derived legacy types have no persisted
+  // read-state to count against — see clientNotifications.service.ts).
+  const notificationCount = user?.clientId ? await getUnreadCountForClient(user.clientId) : 0;
 
   return (
     <ClientPortalShell identityLabel={user?.email ?? ""} notificationCount={notificationCount}>

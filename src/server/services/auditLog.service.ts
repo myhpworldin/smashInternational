@@ -13,6 +13,7 @@ const AUDIT_ACTIONS = new Set<AuditAction>([
   "role_changed",
   "user_blocked",
   "user_unblocked",
+  "user_deleted",
   "password_reset_by_admin",
   "password_changed_by_user",
   "forced_password_change_completed",
